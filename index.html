@@ -9,115 +9,165 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Unbounded:wght@600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<!-- Карта рисуется самим сайтом из бесплатных открытых данных: ключи и регистрация не нужны -->
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
 
 <style>
   :root {
     --bg: #0a0a0a;
-    --panel: rgba(10, 10, 10, .82);
-    --card: rgba(23, 23, 23, .9);
+    --panel: rgba(10, 10, 10, .86);
+    --card: rgba(23, 23, 23, .92);
     --orange: #f97316;
-    --orange-soft: rgba(249, 115, 22, .55);
+    --orange-hi: #ffb066;
+    --orange-soft: rgba(249, 115, 22, .5);
     --orange-bg: rgba(249, 115, 22, .16);
     --text: #f4f4f5;
     --muted: #a1a1aa;
     --safe-top: 0px;
     --safe-bottom: 0px;
     --bar-h: 0px;
-    --panel-w: clamp(178px, 42vw, 340px);
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text);
     font-family: Inter, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  button { font-family: inherit; color: inherit; }
+  button:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
 
-  /* ---------- карта на фоне ---------- */
-  #map { position: fixed; inset: 0; background: var(--bg); z-index: 0; }
-  /* делаем светлые линии карты оранжевыми, а фон чёрным */
-  .leaflet-tile-pane {
-    filter: grayscale(1) sepia(1) hue-rotate(-25deg) saturate(5) brightness(1.7) contrast(1.15);
-  }
-  .leaflet-container { font-family: inherit; background: var(--bg); }
-  .leaflet-control-attribution { background: rgba(10,10,10,.7) !important; color: var(--muted) !important; font-size: 10px; }
-  .leaflet-control-attribution a { color: var(--orange-soft) !important; }
+  /* ---------- карта ---------- */
+  #map { position: fixed; inset: 0; background: var(--bg); touch-action: none; }
+  #map svg { display: block; overflow: hidden; }
+  .grat { fill: none; stroke: rgba(249, 115, 22, .09); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .land { fill: #101010; stroke: rgba(249, 115, 22, .32); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .land.pick { fill: var(--orange-bg); stroke: var(--orange); stroke-width: 1.4; cursor: pointer; transition: fill .2s; }
+  .land.pick:hover { fill: rgba(249, 115, 22, .28); }
+  .land.pick.sel { fill: rgba(249, 115, 22, .5); stroke: var(--orange-hi); stroke-width: 2;
+    filter: drop-shadow(0 0 8px rgba(249, 115, 22, .85)); }
+  .badge circle { fill: var(--bg); stroke: var(--orange); stroke-width: 2; filter: drop-shadow(0 0 6px rgba(249,115,22,.9)); }
+  .badge text { font-size: 20px; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  .map-state { position: fixed; inset: 0; display: grid; place-items: center; text-align: center;
+    color: var(--muted); font-size: 14px; padding: 24px; pointer-events: none; }
+  .map-state button { pointer-events: auto; margin-top: 12px; padding: 10px 18px; border-radius: 12px;
+    background: var(--card); border: 1.5px solid var(--orange); cursor: pointer; }
+  .vignette { position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 60% 50%, transparent 40%, rgba(10,10,10,.8) 100%); }
 
-  /* затемнение по краям, чтобы карта «тонула» в чёрном */
-  .vignette { position: fixed; inset: 0; z-index: 1; pointer-events: none;
-    background: radial-gradient(ellipse at 62% 50%, transparent 35%, rgba(10,10,10,.85) 100%); }
-
-  /* ---------- маркеры на карте ---------- */
-  .pin span { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); display: block; }
-  .pin .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--bg);
-    border: 2px solid var(--orange); box-shadow: 0 0 12px rgba(249,115,22,.7); }
-  .pin .badge { display: none; width: 40px; height: 40px; border-radius: 50%; overflow: hidden;
-    border: 2px solid var(--orange); background: var(--bg);
-    box-shadow: 0 0 0 4px rgba(249,115,22,.25), 0 0 22px rgba(249,115,22,.8); }
-  .pin .badge img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .pin.on .dot { display: none; }
-  .pin.on .badge { display: block; animation: pop .25s ease-out; }
-  @keyframes pop { from { transform: translate(-50%, -50%) scale(.4); } to { transform: translate(-50%, -50%) scale(1); } }
-
-  /* ---------- список стран слева ---------- */
-  .panel { position: fixed; z-index: 5; left: 12px; width: var(--panel-w);
-    top: calc(var(--safe-top) + 12px); bottom: calc(var(--safe-bottom) + var(--bar-h) + 12px);
-    display: flex; flex-direction: column;
-    background: var(--panel); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-    border: 1.5px solid var(--orange); border-radius: 20px;
-    box-shadow: 0 0 28px rgba(249,115,22,.22), inset 0 0 24px rgba(249,115,22,.06);
-    transition: bottom .25s ease; }
-  .head { padding: 16px 14px 10px; }
-  h1 { font-family: Unbounded, Inter, sans-serif; font-weight: 700; font-size: 17px;
-    line-height: 1.2; margin: 0 0 6px; letter-spacing: -.01em; }
-  .hint { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.4; }
-
-  .list { flex: 1; overflow-y: auto; padding: 4px 10px 12px; display: grid; gap: 8px; align-content: start;
+  /* ---------- список стран (компактный, сворачивается) ---------- */
+  .panel { position: fixed; z-index: 5; left: 10px; width: clamp(148px, 38vw, 250px);
+    top: calc(var(--safe-top) + 10px);
+    max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - var(--bar-h) - 20px);
+    display: flex; flex-direction: column; overflow: hidden;
+    background: var(--panel); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border: 1.5px solid var(--orange); border-radius: 16px;
+    box-shadow: 0 0 22px rgba(249, 115, 22, .2); }
+  .head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px;
+    background: none; border: 0; text-align: left; cursor: pointer; }
+  .head .t { flex: 1; min-width: 0; }
+  .head strong { display: block; font-size: 14px; }
+  .head small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 1px; }
+  .head .count { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--orange);
+    color: #0a0a0a; font-size: 12px; font-weight: 700; display: none; place-items: center; }
+  .head .count.on { display: grid; }
+  .head .chev { color: var(--orange); font-size: 12px; transition: transform .2s; }
+  .panel.collapsed .chev { transform: rotate(-90deg); }
+  .list { overflow-y: auto; padding: 0 8px 8px; display: grid; gap: 6px; align-content: start;
     scrollbar-width: thin; scrollbar-color: var(--orange-soft) transparent; }
-  .row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
-    padding: 9px 10px; border-radius: 14px; font: inherit; color: inherit; cursor: pointer;
-    background: var(--card); border: 1px solid var(--orange-soft);
+  .panel.collapsed .list { display: none; }
+  .row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; cursor: pointer;
+    padding: 7px 9px; border-radius: 11px; background: var(--card); border: 1px solid var(--orange-soft);
     transition: background .15s, border-color .15s, transform .1s; }
   .row:active { transform: scale(.98); }
-  .row.on { background: var(--orange-bg); border-color: var(--orange); box-shadow: 0 0 14px rgba(249,115,22,.3); }
-  .flag { flex: none; width: 34px; height: 34px; border-radius: 50%; object-fit: cover;
-    border: 1.5px solid var(--orange); background: var(--bg); }
-  .flag-fallback { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--orange);
-    display: grid; place-items: center; font-size: 20px; }
-  .txt { flex: 1; min-width: 0; }
-  .name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .price { color: var(--orange); font-size: 12.5px; font-weight: 600; margin-top: 1px; }
-  .mark { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--orange-soft);
-    display: grid; place-items: center; font-size: 13px; font-weight: 700; color: transparent; transition: .15s; }
-  .row.on .mark { background: var(--orange); border-color: var(--orange); color: #0a0a0a; }
+  .row.on { background: var(--orange-bg); border-color: var(--orange); box-shadow: 0 0 10px rgba(249,115,22,.3); }
+  .row .f { flex: none; font-size: 22px; line-height: 1; }
+  .row .n { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .m { flex: none; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--orange-soft);
+    display: grid; place-items: center; font-size: 11px; font-weight: 700; color: transparent; transition: .15s; }
+  .row.on .m { background: var(--orange); border-color: var(--orange); color: #0a0a0a; }
 
-  /* ---------- корзина внизу ---------- */
-  .bar { position: fixed; z-index: 6; left: 12px; right: 12px; bottom: calc(var(--safe-bottom) + 12px);
+  /* кнопка «о нас» */
+  .info-btn { position: fixed; z-index: 5; right: 10px; top: calc(var(--safe-top) + 10px);
+    width: 38px; height: 38px; border-radius: 50%; cursor: pointer; font-weight: 700; font-size: 17px;
+    background: var(--panel); border: 1.5px solid var(--orange); color: var(--orange);
+    box-shadow: 0 0 16px rgba(249,115,22,.25); }
+
+  /* ---------- корзина ---------- */
+  .bar { position: fixed; z-index: 6; left: 10px; right: 10px; bottom: calc(var(--safe-bottom) + 10px);
     background: var(--panel); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-    border: 1.5px solid var(--orange); border-radius: 20px; padding: 12px;
-    box-shadow: 0 0 28px rgba(249,115,22,.25);
-    transform: translateY(160%); transition: transform .3s cubic-bezier(.2,.9,.3,1); }
-  .bar.show { transform: translateY(0); }
-  .bar-in { max-width: 560px; margin: 0 auto; }
-  .sum { display: flex; align-items: center; gap: 10px; }
-  .chips { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+    border: 1.5px solid var(--orange); border-radius: 18px; padding: 10px 12px;
+    box-shadow: 0 0 26px rgba(249, 115, 22, .25);
+    transform: translateY(170%); transition: transform .3s cubic-bezier(.2, .9, .3, 1); }
+  .bar.show { transform: none; }
+  .bar-in { max-width: 560px; margin: 0 auto; display: flex; align-items: center; gap: 10px; }
+  .chips { flex: 1; min-width: 0; display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none; font-size: 22px; }
   .chips::-webkit-scrollbar { display: none; }
-  .chip { flex: none; padding: 0; width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
-    border: 1.5px solid var(--orange); background: var(--bg); overflow: hidden; }
-  .chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .total { flex: none; text-align: right; }
-  .total small { display: block; color: var(--muted); font-size: 12px; }
-  .total strong { font-size: 18px; }
-  .pay { width: 100%; margin-top: 10px; padding: 14px; border: 1.5px solid var(--orange); border-radius: 14px;
-    background: var(--orange); color: #0a0a0a; font: 700 16px Inter, sans-serif; cursor: pointer;
-    box-shadow: 0 0 18px rgba(249,115,22,.45); transition: transform .1s, background .15s; }
-  .pay:active { transform: scale(.98); background: #ea580c; }
+  .chip { flex: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 20px; line-height: 1;
+    background: var(--bg); border: 1.5px solid var(--orange); }
+  .tot { flex: none; text-align: right; line-height: 1.2; }
+  .tot small { display: block; color: var(--muted); font-size: 11.5px; }
+  .tot strong { font-size: 16px; }
+  .btn { flex: none; padding: 12px 18px; border-radius: 13px; cursor: pointer; font-weight: 700; font-size: 15px;
+    background: var(--orange); color: #0a0a0a; border: 1.5px solid var(--orange);
+    box-shadow: 0 0 16px rgba(249, 115, 22, .45); transition: transform .1s, background .15s; }
+  .btn:active { transform: scale(.97); background: #ea580c; }
+  .btn.ghost { background: transparent; color: var(--text); box-shadow: none; border-color: var(--orange-soft); }
 
-  .toast { position: fixed; z-index: 9; left: 50%; top: calc(var(--safe-top) + 14px);
-    transform: translate(-50%, -150%); max-width: 90vw; padding: 10px 16px; border-radius: 14px;
-    background: var(--bg); border: 1.5px solid var(--orange); font-size: 13.5px; text-align: center;
-    box-shadow: 0 0 20px rgba(249,115,22,.4); transition: transform .3s; }
+  /* ---------- экраны-накладки (заставка и «что вы получите») ---------- */
+  .screen { position: fixed; inset: 0; z-index: 20; background: var(--bg); display: flex; flex-direction: column;
+    opacity: 0; visibility: hidden; transform: translateY(14px);
+    transition: opacity .3s, transform .3s, visibility 0s .3s; }
+  .screen.show { opacity: 1; visibility: visible; transform: none; transition: opacity .3s, transform .3s; }
+  .screen .scroll { flex: 1; overflow-y: auto; padding: calc(var(--safe-top) + 22px) 18px 24px; }
+  .screen .foot { padding: 12px 18px calc(var(--safe-bottom) + 14px); border-top: 1.5px solid var(--orange-soft);
+    background: var(--bg); display: flex; gap: 10px; align-items: center; }
+  .screen .foot .btn { flex: 1; }
+  .wrap { max-width: 520px; margin: 0 auto; }
+
+  /* заставка */
+  #splash { background: radial-gradient(ellipse at 50% -10%, rgba(249,115,22,.28), transparent 60%), var(--bg); z-index: 30; }
+  .logo { width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--orange); display: grid; place-items: center;
+    font-size: 30px; box-shadow: 0 0 28px rgba(249,115,22,.5), inset 0 0 18px rgba(249,115,22,.25); margin-bottom: 18px; }
+  h1, h2 { font-family: Unbounded, Inter, sans-serif; letter-spacing: -.01em; margin: 0; }
+  h1 { font-size: 30px; line-height: 1.1; }
+  .tag { color: var(--muted); font-size: 16px; line-height: 1.45; margin: 12px 0 26px; }
+  h2 { font-size: 16px; margin: 0 0 10px; }
+  .block { border: 1.5px solid var(--orange-soft); border-radius: 18px; padding: 14px 16px; margin-bottom: 14px; background: var(--card); }
+  .block p { margin: 0; color: #d4d4d8; font-size: 14.5px; line-height: 1.55; }
+  .feat { display: flex; gap: 12px; padding: 12px 0; }
+  .feat + .feat { border-top: 1px solid rgba(249,115,22,.25); }
+  .feat .i { flex: none; width: 40px; height: 40px; border-radius: 12px; border: 1.5px solid var(--orange);
+    display: grid; place-items: center; font-size: 19px; background: var(--orange-bg); }
+  .feat b { display: block; font-size: 14.5px; margin-bottom: 2px; }
+  .feat span { color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+  .steps { display: grid; gap: 8px; }
+  .steps div { display: flex; align-items: center; gap: 12px; font-size: 14.5px; }
+  .steps i { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--orange); color: #0a0a0a;
+    display: grid; place-items: center; font-style: normal; font-weight: 700; font-size: 13px; }
+  .price-note { text-align: center; color: var(--muted); font-size: 13.5px; margin-top: 4px; }
+  .price-note b { color: var(--orange); }
+
+  /* что вы получите */
+  .rcard { border: 1.5px solid var(--orange); border-radius: 18px; padding: 14px 16px; margin-bottom: 12px;
+    background: var(--card); box-shadow: 0 0 14px rgba(249,115,22,.15); }
+  .rhead { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .rhead .f { font-size: 28px; line-height: 1; }
+  .rhead .n { flex: 1; font-weight: 700; font-size: 16px; }
+  .rhead .p { color: var(--orange); font-weight: 700; }
+  .rhead .x { width: 28px; height: 28px; border-radius: 50%; background: none; border: 1.5px solid var(--orange-soft);
+    cursor: pointer; color: var(--muted); font-size: 14px; }
+  .rcard ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .rcard li { display: flex; gap: 8px; font-size: 14px; color: #d4d4d8; line-height: 1.4; }
+  .rcard li::before { content: "✓"; color: var(--orange); font-weight: 700; }
+  .delivery { border: 1.5px dashed var(--orange-soft); border-radius: 18px; padding: 14px 16px; margin: 4px 0 14px; }
+  .delivery p { margin: 0; font-size: 14px; line-height: 1.55; color: #d4d4d8; }
+  .foot .tot { padding-right: 4px; }
+
+  .toast { position: fixed; z-index: 99; left: 50%; top: calc(var(--safe-top) + 14px);
+    transform: translate(-50%, -160%); max-width: 90vw; padding: 10px 16px; border-radius: 14px; text-align: center;
+    background: var(--bg); border: 1.5px solid var(--orange); font-size: 13.5px;
+    box-shadow: 0 0 20px rgba(249, 115, 22, .4); transition: transform .3s; }
   .toast.show { transform: translate(-50%, 0); }
 
-  button:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
@@ -125,43 +175,100 @@
 
 <div id="map" aria-label="Карта Европы"></div>
 <div class="vignette"></div>
+<div class="map-state" id="mapState">Загружаем карту…</div>
 
-<aside class="panel">
-  <div class="head">
-    <h1>Куда поступаем?</h1>
-    <p class="hint">Нажмите на страны, которые рассматриваете. Они попадут в корзину и отметятся на карте.</p>
-  </div>
+<aside class="panel" id="panel">
+  <button class="head" id="panelHead" type="button" aria-expanded="true">
+    <span class="t"><strong>Страны</strong><small>249 ₽ за страну</small></span>
+    <span class="count" id="count">0</span>
+    <span class="chev">▼</span>
+  </button>
   <div class="list" id="list"></div>
 </aside>
 
-<div class="bar" id="bar"><div class="bar-in" id="barIn"></div></div>
+<button class="info-btn" id="infoBtn" type="button" aria-label="О компании">i</button>
+
+<div class="bar" id="bar">
+  <div class="bar-in">
+    <div class="chips" id="chips"></div>
+    <div class="tot"><small id="barCount"></small><strong id="barTotal"></strong></div>
+    <button class="btn" id="next" type="button">Далее</button>
+  </div>
+</div>
+
+<!-- ЗАСТАВКА / МЕНЮ -->
+<section class="screen show" id="splash">
+  <div class="scroll"><div class="wrap">
+    <div class="logo">🇪🇺</div>
+    <h1>Euro Admissions</h1>
+    <p class="tag">Документы для поступления в вузы Европы для граждан России. Выберите страны и получите готовые списки в чате.</p>
+
+    <div class="block">
+      <h2>О нас</h2>
+      <p>Мы собираем списки вузов и документов, которые нужны для поступления в европейские университеты, и отдаём их в одном сообщении. Вам не нужно искать требования на десятках сайтов.</p>
+    </div>
+
+    <div class="block">
+      <h2>Что мы предоставляем</h2>
+      <div class="feat"><div class="i">🏛</div><div><b>Список вузов страны</b><span>Университеты выбранной страны, куда можно поступать.</span></div></div>
+      <div class="feat"><div class="i">📄</div><div><b>Документы по каждому вузу</b><span>Что именно нужно собрать для конкретного вуза.</span></div></div>
+      <div class="feat"><div class="i">🎓</div><div><b>Разбивка по направлениям</b><span>Требования для разных направлений подготовки.</span></div></div>
+    </div>
+
+    <div class="block">
+      <h2>Как это работает</h2>
+      <div class="steps">
+        <div><i>1</i>Выберите страны на карте</div>
+        <div><i>2</i>Оплатите заказ</div>
+        <div><i>3</i>Получите списки в чате Telegram</div>
+      </div>
+    </div>
+    <p class="price-note">Стоимость: <b>249 ₽</b> за одну страну</p>
+  </div></div>
+  <div class="foot"><button class="btn" id="start" type="button">Выбрать страны</button></div>
+</section>
+
+<!-- ЧТО ВЫ ПОЛУЧИТЕ -->
+<section class="screen" id="review">
+  <div class="scroll"><div class="wrap">
+    <h2 style="font-size:22px;margin-bottom:6px">Что вы получите</h2>
+    <p class="tag" style="margin:0 0 18px;font-size:14.5px">Проверьте выбранные страны. После оплаты для каждой из них придёт полный комплект.</p>
+    <div id="reviewList"></div>
+    <div class="delivery"><p>Сразу после оплаты бот пришлёт всё в чат Telegram: сначала список вузов выбранных стран, затем документы по каждому вузу и направлению.</p></div>
+  </div></div>
+  <div class="foot">
+    <button class="btn ghost" id="back" type="button" style="flex:none">Назад</button>
+    <div class="tot"><small id="revCount"></small><strong id="revTotal"></strong></div>
+    <button class="btn" id="pay" type="button">Перейти к оплате</button>
+  </div>
+</section>
+
 <div class="toast" id="toast"></div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 /* =====================================================================
-   КАТАЛОГ СТРАН. Чтобы добавить или изменить страну, правьте только этот список.
-   code — двухбуквенный код страны (для флага), price — цена в рублях.
+   КАТАЛОГ. Здесь правятся страны и цена.
+   emoji — флаг, geo — название страны в картографических данных (английское).
    ===================================================================== */
+const PRICE = 249;
 const COUNTRIES = [
-  { id: "germany",     code: "de", name: "Германия",    flag: "🇩🇪", price: 1500, lat: 51.2, lng: 10.4 },
-  { id: "france",      code: "fr", name: "Франция",     flag: "🇫🇷", price: 1500, lat: 46.6, lng: 2.4 },
-  { id: "italy",       code: "it", name: "Италия",      flag: "🇮🇹", price: 1500, lat: 42.8, lng: 12.5 },
-  { id: "spain",       code: "es", name: "Испания",     flag: "🇪🇸", price: 1500, lat: 40.2, lng: -3.7 },
-  { id: "netherlands", code: "nl", name: "Нидерланды",  flag: "🇳🇱", price: 1500, lat: 52.2, lng: 5.5 },
-  { id: "poland",      code: "pl", name: "Польша",      flag: "🇵🇱", price: 1500, lat: 52.0, lng: 19.4 },
-  { id: "czechia",     code: "cz", name: "Чехия",       flag: "🇨🇿", price: 1500, lat: 49.8, lng: 15.5 },
-  { id: "austria",     code: "at", name: "Австрия",     flag: "🇦🇹", price: 1500, lat: 47.6, lng: 14.1 },
-  { id: "switzerland", code: "ch", name: "Швейцария",   flag: "🇨🇭", price: 1500, lat: 46.8, lng: 8.2 },
-  { id: "belgium",     code: "be", name: "Бельгия",     flag: "🇧🇪", price: 1500, lat: 50.6, lng: 4.7 },
-  { id: "portugal",    code: "pt", name: "Португалия",  flag: "🇵🇹", price: 1500, lat: 39.6, lng: -8.0 },
-  { id: "hungary",     code: "hu", name: "Венгрия",     flag: "🇭🇺", price: 1500, lat: 47.1, lng: 19.5 },
-  { id: "finland",     code: "fi", name: "Финляндия",   flag: "🇫🇮", price: 1500, lat: 62.5, lng: 26.0 },
-  { id: "sweden",      code: "se", name: "Швеция",      flag: "🇸🇪", price: 1500, lat: 62.0, lng: 15.0 }
+  { id: "italy",       name: "Италия",          flag: "🇮🇹", geo: "Italy" },
+  { id: "france",      name: "Франция",         flag: "🇫🇷", geo: "France" },
+  { id: "spain",       name: "Испания",         flag: "🇪🇸", geo: "Spain" },
+  { id: "netherlands", name: "Нидерланды",      flag: "🇳🇱", geo: "Netherlands" },
+  { id: "germany",     name: "Германия",        flag: "🇩🇪", geo: "Germany" },
+  { id: "belgium",     name: "Бельгия",         flag: "🇧🇪", geo: "Belgium" },
+  { id: "uk",          name: "Великобритания",  flag: "🇬🇧", geo: "United Kingdom" },
+  { id: "hungary",     name: "Венгрия",         flag: "🇭🇺", geo: "Hungary" },
+  { id: "austria",     name: "Австрия",         flag: "🇦🇹", geo: "Austria" },
+  { id: "switzerland", name: "Швейцария",       flag: "🇨🇭", geo: "Switzerland" },
+  { id: "sweden",      name: "Швеция",          flag: "🇸🇪", geo: "Sweden" }
 ];
+const byGeo = Object.fromEntries(COUNTRIES.map(c => [c.geo, c]));
 
 /* ---------- Telegram (необязательно: сайт работает и без него) ---------- */
 const tg = window.Telegram && window.Telegram.WebApp;
+const inTg = !!(tg && tg.initData);
 function applyInsets() {
   const s = (tg && tg.safeAreaInset) || { top: 0, bottom: 0 };
   const c = (tg && tg.contentSafeAreaInset) || { top: 0, bottom: 0 };
@@ -169,76 +276,144 @@ function applyInsets() {
   r.setProperty("--safe-top", (s.top + c.top) + "px");
   r.setProperty("--safe-bottom", s.bottom + "px");
 }
-if (tg && tg.initData) {
-  tg.ready();
-  tg.expand();
+if (inTg) {
+  tg.ready(); tg.expand();
   try { if (tg.isVersionAtLeast("8.0")) tg.requestFullscreen(); } catch (e) {}
   try { tg.setHeaderColor("#0a0a0a"); tg.setBackgroundColor("#0a0a0a"); tg.setBottomBarColor("#0a0a0a"); } catch (e) {}
   try { tg.disableVerticalSwipes(); } catch (e) {}
   applyInsets();
   ["safeAreaChanged", "contentSafeAreaChanged", "fullscreenChanged"].forEach(ev => tg.onEvent(ev, applyInsets));
 }
-const haptic = (type) => { try { tg.HapticFeedback.impactOccurred(type); } catch (e) {} };
+const haptic = t => { try { tg.HapticFeedback.impactOccurred(t); } catch (e) {} };
 
 /* ---------- утилиты ---------- */
 const $ = id => document.getElementById(id);
-const flagUrl = c => `https://flagcdn.com/w80/${c.code}.png`;
 const fmt = n => new Intl.NumberFormat("ru-RU").format(n) + " ₽";
 const cart = new Set();
 const selected = () => COUNTRIES.filter(c => cart.has(c.id));
 const plural = n => (n % 10 === 1 && n % 100 !== 11) ? "страна"
   : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? "страны" : "стран";
-
-function flagImg(c, cls) {
-  const img = document.createElement("img");
-  img.className = cls; img.src = flagUrl(c); img.alt = c.name; img.loading = "lazy";
-  img.onerror = () => { // если картинка флага не загрузилась, показываем эмодзи
-    const span = document.createElement("span");
-    span.className = "flag-fallback"; span.textContent = c.flag;
-    img.replaceWith(span);
-  };
-  return img;
-}
-
 let toastTimer;
 function toast(text) {
   const t = $("toast"); t.textContent = text; t.classList.add("show");
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
 }
 
-/* ---------- карта ---------- */
-const isNarrow = () => window.innerWidth < 700;
-const map = L.map("map", {
-  zoomControl: false, zoomSnap: 0.5, minZoom: 3, maxZoom: 7,
-  maxBounds: [[28, -30], [74, 50]], maxBoundsViscosity: 0.8
-});
-L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png", {
-  subdomains: "abcd",
-  attribution: "&copy; OpenStreetMap &copy; CARTO"
-}).addTo(map);
-
-// сдвигаем центр так, чтобы страна оказывалась в видимой части карты справа от списка
-function focus(lat, lng, zoom, animate = true) {
-  const panelW = document.querySelector(".panel").offsetWidth + 12;
-  const p = map.project([lat, lng], zoom).subtract([panelW / 2, 0]);
-  const target = map.unproject(p, zoom);
-  animate ? map.flyTo(target, zoom, { duration: 0.9 }) : map.setView(target, zoom);
+/* ---------- экраны ---------- */
+let screen = "splash";
+function show(name) {
+  screen = name;
+  $("splash").classList.toggle("show", name === "splash");
+  $("review").classList.toggle("show", name === "review");
+  if (inTg) { try { name === "review" ? tg.BackButton.show() : tg.BackButton.hide(); } catch (e) {} }
 }
-focus(53, 14, isNarrow() ? 3 : 4.5, false);
+if (inTg) { try { tg.BackButton.onClick(() => show("map")); } catch (e) {} }
+$("start").onclick = () => show("map");
+$("infoBtn").onclick = () => show("splash");
+$("back").onclick = () => show("map");
+$("next").onclick = () => { renderReview(); show("review"); haptic("medium"); };
 
-const markers = {};
-function pinIcon(c, on) {
-  return L.divIcon({
-    className: "pin" + (on ? " on" : ""),
-    iconSize: [0, 0],
-    html: `<span class="dot"></span><span class="badge"><img src="${flagUrl(c)}" alt=""></span>`
+/* ---------- карта (рисуется из открытых данных, без API-ключей) ---------- */
+const TOPO_URLS = [
+  "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-50m.json",
+  "https://unpkg.com/world-atlas@2.0.2/countries-50m.json"
+];
+let topo = null, svg, root, projection, zoomer, centers = {}, picks, badgesG, curK = 1;
+
+async function loadTopo() {
+  for (const u of TOPO_URLS) {
+    try { const r = await fetch(u); if (r.ok) return await r.json(); } catch (e) {}
+  }
+  throw new Error("map");
+}
+
+function labelPoint(f) {
+  const g = f.geometry;
+  let shape = f;
+  if (g.type === "MultiPolygon") {            // берём самый большой кусок страны (без заморских территорий)
+    let best = null, area = -1;
+    g.coordinates.forEach(c => {
+      const poly = { type: "Polygon", coordinates: c }, a = d3.geoArea(poly);
+      if (a > area) { area = a; best = poly; }
+    });
+    shape = best;
+  }
+  return projection(d3.geoCentroid(shape));
+}
+
+function visibleCenterX() {
+  const right = $("panel").getBoundingClientRect().right + 8;
+  return right + (innerWidth - right) / 2;
+}
+function focusOn(x, y, k, animate) {
+  const t = d3.zoomIdentity.translate(visibleCenterX() - k * x, (innerHeight - 40) / 2 - k * y).scale(k);
+  (animate ? svg.transition().duration(850) : svg).call(zoomer.transform, t);
+}
+
+function drawMap() {
+  if (!topo) return;
+  const el = $("map"), W = el.clientWidth, H = el.clientHeight;
+  el.innerHTML = "";
+  svg = d3.select(el).append("svg").attr("width", W).attr("height", H);
+  root = svg.append("g");
+
+  const frame = { type: "MultiPoint", coordinates: [[-11, 35], [28, 35], [28, 62], [-11, 62]] };
+  projection = d3.geoMercator().fitExtent([[0, 0], [W, H]], frame);
+  const path = d3.geoPath(projection);
+
+  const all = topojson.feature(topo, topo.objects.countries).features;
+  const feats = all.filter(f => byGeo[f.properties.name] || f.properties.name === "Russia" ||
+    (c => c[0] > -32 && c[0] < 62 && c[1] > 24 && c[1] < 76)(d3.geoCentroid(f)));
+
+  root.append("path").datum(d3.geoGraticule10()).attr("class", "grat").attr("d", path);
+  picks = root.append("g").selectAll("path").data(feats).join("path")
+    .attr("d", path)
+    .attr("class", d => "land" + (byGeo[d.properties.name] ? " pick" : ""))
+    .on("click", (e, d) => { const c = byGeo[d.properties.name]; if (c) toggle(c.id, false); });
+
+  feats.forEach(f => { const c = byGeo[f.properties.name]; if (c) centers[c.id] = labelPoint(f); });
+  badgesG = root.append("g");
+
+  zoomer = d3.zoom().scaleExtent([1, 10])
+    .translateExtent([[-W, -H], [2 * W, 2 * H]])
+    .on("zoom", e => { root.attr("transform", e.transform); curK = e.transform.k; placeBadges(); });
+  svg.call(zoomer).on("dblclick.zoom", null);
+
+  const narrow = innerWidth < 700;
+  const [cx, cy] = projection([8, 49.5]);
+  focusOn(cx, cy, narrow ? 2.6 : 1.25, false);
+  $("mapState").style.display = "none";
+  paintSelection();
+}
+
+function placeBadges() {
+  if (!badgesG) return;
+  badgesG.selectAll("g.badge").attr("transform", d => `translate(${d.p[0]},${d.p[1]}) scale(${1 / curK})`);
+}
+function paintSelection() {
+  if (!picks) return;
+  picks.classed("sel", d => { const c = byGeo[d.properties.name]; return !!(c && cart.has(c.id)); });
+  const data = selected().filter(c => centers[c.id]).map(c => ({ c, p: centers[c.id] }));
+  badgesG.selectAll("g.badge").data(data, d => d.c.id).join(enter => {
+    const g = enter.append("g").attr("class", "badge");
+    g.append("circle").attr("r", 17);
+    g.append("text").text(d => d.c.flag);
+    return g;
   });
+  placeBadges();
 }
-COUNTRIES.forEach(c => {
-  const m = L.marker([c.lat, c.lng], { icon: pinIcon(c, false), keyboard: false }).addTo(map);
-  m.on("click", () => toggle(c.id, false));
-  markers[c.id] = m;
-});
+
+async function initMap() {
+  $("mapState").style.display = "grid";
+  $("mapState").innerHTML = "Загружаем карту…";
+  try {
+    topo = await loadTopo();
+    drawMap();
+  } catch (e) {
+    $("mapState").innerHTML = `<div>Не удалось загрузить карту.<br>Страны всё равно можно выбрать в списке.<br><button id="retry" type="button">Повторить</button></div>`;
+    $("retry").onclick = initMap;
+  }
+}
 
 /* ---------- список стран ---------- */
 function renderList() {
@@ -247,44 +422,36 @@ function renderList() {
     const row = document.createElement("button");
     row.type = "button"; row.dataset.id = c.id;
     row.className = "row" + (cart.has(c.id) ? " on" : "");
-    row.appendChild(flagImg(c, "flag"));
-    const txt = document.createElement("div"); txt.className = "txt";
-    txt.innerHTML = `<div class="name">${c.name}</div><div class="price">${fmt(c.price)}</div>`;
-    row.appendChild(txt);
-    const mark = document.createElement("span"); mark.className = "mark"; mark.textContent = "✓";
-    row.appendChild(mark);
+    row.innerHTML = `<span class="f">${c.flag}</span><span class="n">${c.name}</span><span class="m">✓</span>`;
     row.onclick = () => toggle(c.id, true);
     list.appendChild(row);
   });
 }
+$("panelHead").onclick = () => {
+  const collapsed = $("panel").classList.toggle("collapsed");
+  $("panelHead").setAttribute("aria-expanded", String(!collapsed));
+};
 
 /* ---------- корзина ---------- */
 function renderBar() {
-  const items = selected();
-  const bar = $("bar"), inner = $("barIn");
+  const items = selected(), bar = $("bar");
+  const n = $("count"); n.textContent = items.length; n.classList.toggle("on", items.length > 0);
   if (!items.length) {
     bar.classList.remove("show");
     document.documentElement.style.setProperty("--bar-h", "0px");
     return;
   }
-  const total = items.reduce((s, c) => s + c.price, 0);
-  inner.innerHTML = `
-    <div class="sum">
-      <div class="chips" id="chips"></div>
-      <div class="total"><small>${items.length} ${plural(items.length)}</small><strong>${fmt(total)}</strong></div>
-    </div>
-    <button class="pay" id="pay" type="button">Оплатить ${fmt(total)}</button>`;
-  const chips = $("chips");
+  $("barCount").textContent = `${items.length} ${plural(items.length)}`;
+  $("barTotal").textContent = fmt(items.length * PRICE);
+  const chips = $("chips"); chips.innerHTML = "";
   items.forEach(c => {
     const b = document.createElement("button");
-    b.type = "button"; b.className = "chip"; b.title = "Убрать " + c.name;
-    b.appendChild(flagImg(c, ""));
+    b.type = "button"; b.className = "chip"; b.textContent = c.flag; b.title = "Убрать " + c.name;
     b.onclick = () => toggle(c.id, false);
     chips.appendChild(b);
   });
-  $("pay").onclick = checkout;
   bar.classList.add("show");
-  document.documentElement.style.setProperty("--bar-h", (bar.offsetHeight + 12) + "px");
+  document.documentElement.style.setProperty("--bar-h", (bar.offsetHeight + 10) + "px");
 }
 
 function toggle(id, fly) {
@@ -292,27 +459,49 @@ function toggle(id, fly) {
   const adding = !cart.has(id);
   adding ? cart.add(id) : cart.delete(id);
   haptic("light");
-  markers[id].setIcon(pinIcon(c, adding));
-  if (adding && fly) focus(c.lat, c.lng, isNarrow() ? 4 : 5);
   const row = document.querySelector(`.row[data-id="${id}"]`);
   if (row) row.classList.toggle("on", adding);
+  paintSelection();
   renderBar();
+  if (adding && fly && centers[id]) focusOn(centers[id][0], centers[id][1], innerWidth < 700 ? 4 : 3.2, true);
 }
 
-function checkout() {
+/* ---------- «что вы получите» ---------- */
+function renderReview() {
+  const items = selected();
+  $("reviewList").innerHTML = items.map(c => `
+    <div class="rcard">
+      <div class="rhead">
+        <span class="f">${c.flag}</span><span class="n">${c.name}</span><span class="p">${fmt(PRICE)}</span>
+        <button class="x" type="button" data-id="${c.id}" aria-label="Убрать ${c.name}">✕</button>
+      </div>
+      <ul>
+        <li>Список вузов страны</li>
+        <li>Документы для поступления в каждый вуз</li>
+        <li>Разбивка по направлениям подготовки</li>
+      </ul>
+    </div>`).join("");
+  $("reviewList").querySelectorAll(".x").forEach(b => b.onclick = () => {
+    toggle(b.dataset.id, false);
+    if (!cart.size) show("map"); else renderReview();
+  });
+  $("revCount").textContent = `${items.length} ${plural(items.length)}`;
+  $("revTotal").textContent = fmt(items.length * PRICE);
+}
+
+/* ---------- оплата: пока без изменений, будет подключена позже ---------- */
+$("pay").onclick = () => {
   const ids = [...cart];
   if (!ids.length) return;
   haptic("medium");
-  if (tg && tg.initData) {
-    tg.sendData(JSON.stringify({ ids }));   // подключится, когда будет бот
-  } else {
-    toast("Демо-версия: оплата будет подключена позже");
-  }
-}
+  if (inTg) tg.sendData(JSON.stringify({ ids }));
+  else toast("Демо-версия: оплата будет подключена позже");
+};
 
 renderList();
 renderBar();
-window.addEventListener("resize", () => { map.invalidateSize(); renderBar(); });
+initMap();
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { drawMap(); renderBar(); }, 200); });
 </script>
 </body>
 </html>
