@@ -1,66 +1,232 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Euro Admissions</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Euro Admissions</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
-<body class="bg-gray-50 min-h-screen p-4">
-    <div class="max-w-md mx-auto">
-        <h1 class="text-2xl font-bold text-center mb-6">Выберите страну</h1>
-        
-        <!-- Выпадающий список -->
-        <select id="countrySelect" class="w-full p-3 rounded-lg border border-gray-300 mb-6 bg-white shadow-sm focus:ring-2 focus:ring-blue-500">
-            <option value="">Выберите страну...</option>
-            <option value="Германия">Германия</option>
-            <option value="Польша">Польша</option>
-            <option value="Чехия">Чехия</option>
-            <option value="Италия">Италия</option>
-            <option value="Франция">Франция</option>
-        </select>
+<body class="bg-neutral-950 text-neutral-100 min-h-screen antialiased selection:bg-orange-500 selection:text-white">
+  <div class="max-w-xl mx-auto px-4 py-6 pb-28">
+    <header class="mb-6">
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/15 text-orange-400 text-xs font-medium mb-2">
+        Euro Admissions
+      </div>
+      <h1 class="text-2xl font-bold tracking-tight">Поступление в вузы Европы</h1>
+      <p class="text-sm text-neutral-400 mt-1">Выберите страну и нужные этапы сопровождения</p>
+    </header>
 
-        <div id="serviceList" class="space-y-3">
-            <!-- Здесь появятся услуги выбранной страны -->
-        </div>
+    <section class="mb-6">
+      <label class="block text-xs uppercase tracking-wider text-neutral-400 mb-2">Страна</label>
+      <div id="countries" class="grid grid-cols-2 sm:grid-cols-3 gap-2.5"></div>
+    </section>
 
-        <div class="mt-8 p-4 bg-white rounded-xl shadow-lg border border-gray-100">
-            <h2 class="font-bold text-lg mb-2">🛒 Ваша корзина</h2>
-            <div id="cartItems" class="text-gray-600 italic">Пусто</div>
-            <button onclick="checkout()" class="w-full mt-4 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700">Оплатить</button>
-        </div>
+    <section>
+      <div class="flex items-center justify-between mb-2">
+        <label class="block text-xs uppercase tracking-wider text-neutral-400">Услуги</label>
+        <span id="selected-country-label" class="text-xs text-orange-400 font-medium"></span>
+      </div>
+      <div id="services" class="space-y-3"></div>
+    </section>
+  </div>
+
+  <div id="cart-bar" class="fixed bottom-0 inset-x-0 bg-neutral-900/95 backdrop-blur border-t border-neutral-800 px-4 py-3 hidden">
+    <div class="max-w-xl mx-auto flex items-center justify-between gap-4">
+      <div>
+        <div id="cart-count" class="text-xs text-neutral-400">0 услуг</div>
+        <div id="cart-total" class="text-base font-bold text-orange-400">€0</div>
+      </div>
+      <button id="checkout-btn" class="px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-400 active:scale-[0.99] text-neutral-950 font-semibold text-sm transition">
+        Оформить заказ
+      </button>
     </div>
+  </div>
 
-    <script>
-        const cart = [];
-        const countrySelect = document.getElementById('countrySelect');
-        const serviceList = document.getElementById('serviceList');
+  <script>
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
 
-        countrySelect.addEventListener('change', (e) => {
-            const country = e.target.value;
-            serviceList.innerHTML = country ? `
-                <div class="bg-white p-4 rounded-xl shadow border border-gray-100 flex justify-between items-center">
-                    <span>Консультация (${country})</span>
-                    <button onclick="addToCart('Консультация в ${country}', 50)" class="bg-green-500 text-white px-3 py-1 rounded-lg">+</button>
-                </div>
-            ` : '';
-        });
+    const CATALOG = {
+      DE: {
+        name: "Германия",
+        flag: "🇩🇪",
+        services: [
+          { id: "de_consult", title: "Стратегия и подбор вузов", desc: "Список программ, требования по языку, сроки подачи.", priceEur: 120 },
+          { id: "de_docs", title: "Подготовка и перевод документов", desc: "Чек-лист, проверка мотивационного письма и резюме.", priceEur: 290 },
+          { id: "de_apply", title: "Полное сопровождение подачи", desc: "Подача заявок в вузы и контроль статуса.", priceEur: 550 }
+        ]
+      },
+      FR: {
+        name: "Франция",
+        flag: "🇫🇷",
+        services: [
+          { id: "fr_consult", title: "Консультация по Campus France", desc: "Разбор процедуры, выбор вузов и бюджетирование.", priceEur: 120 },
+          { id: "fr_docs", title: "Сборка досье и мотивация", desc: "Структура мотивационных писем и проверка анкеты.", priceEur: 280 },
+          { id: "fr_apply", title: "Сопровождение до зачисления", desc: "Ведение личного кабинета и подготовка к собеседованию.", priceEur: 520 }
+        ]
+      },
+      ES: {
+        name: "Испания",
+        flag: "🇪🇸",
+        services: [
+          { id: "es_consult", title: "Подбор программ в Испании", desc: "Государственные и частные вузы, требования к документам.", priceEur: 110 },
+          { id: "es_docs", title: "Омологация и пакет документов", desc: "Пошаговая подготовка и проверка документов.", priceEur: 270 },
+          { id: "es_apply", title: "Подача заявок под ключ", desc: "Сопровождение подачи во всех выбранных вузах.", priceEur: 490 }
+        ]
+      },
+      IT: {
+        name: "Италия",
+        flag: "🇮🇹",
+        services: [
+          { id: "it_consult", title: "Консультация по поступлению", desc: "Выбор вузов, стипендии DSU и сроки.", priceEur: 110 },
+          { id: "it_docs", title: "Подготовка документов и Universitaly", desc: "Проверка пакета и заполнение заявки.", priceEur: 260 },
+          { id: "it_apply", title: "Полное сопровождение", desc: "Подача заявки и координация на каждом этапе.", priceEur: 480 }
+        ]
+      },
+      NL: {
+        name: "Нидерланды",
+        flag: "🇳🇱",
+        services: [
+          { id: "nl_consult", title: "Подбор англоязычных программ", desc: "Исследовательские и прикладные университеты.", priceEur: 130 },
+          { id: "nl_docs", title: "Мотивационное письмо и CV", desc: "Подготовка и редактура документов под требования вузов.", priceEur: 300 },
+          { id: "nl_apply", title: "Сопровождение подачи", desc: "Подача через Studielink и порталы вузов.", priceEur: 540 }
+        ]
+      }
+    };
 
-        function addToCart(item, price) {
-            cart.push({item, price});
-            document.getElementById('cartItems').innerHTML = cart.map(i => `${i.item} - ${i.price}Это отличная цель! Чтобы сделать современный интерфейс с выпадающими списками, красивыми карточками стран и корзиной, нам нужно обновить твой `index.html`.
+    let activeCountry = Object.keys(CATALOG)[0];
+    const cart = new Map();
 
-Для «супер современного» вида мы будем использовать библиотеку стилей **Tailwind CSS** (она делает всё стильным без лишнего кода) и добавим JavaScript для управления корзиной.
+    const countriesEl = document.getElementById("countries");
+    const servicesEl = document.getElementById("services");
+    const countryLabelEl = document.getElementById("selected-country-label");
+    const cartBarEl = document.getElementById("cart-bar");
+    const cartCountEl = document.getElementById("cart-count");
+    const cartTotalEl = document.getElementById("cart-total");
+    const checkoutBtn = document.getElementById("checkout-btn");
 
-На GitHub в файле `index.html` замени всё на этот код:
+    function renderCountries() {
+      countriesEl.innerHTML = "";
+      for (const [code, item] of Object.entries(CATALOG)) {
+        const active = code === activeCountry;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `flex items-center gap-2 px-3.5 py-2.5 rounded-xl border text-left text-sm font-medium transition ${
+          active
+            ? "bg-orange-500 text-neutral-950 border-orange-500"
+            : "bg-neutral-900 text-neutral-200 border-neutral-800 hover:border-neutral-700"
+        }`;
+        btn.innerHTML = `<span>${item.flag}</span><span>${item.name}</span>`;
+        btn.onclick = () => {
+          activeCountry = code;
+          renderCountries();
+          renderServices();
+        };
+        countriesEl.appendChild(btn);
+      }
+    }
 
-).join('<br>');
-        }
+    function renderServices() {
+      const country = CATALOG[activeCountry];
+      countryLabelEl.textContent = `${country.flag} ${country.name}`;
+      servicesEl.innerHTML = "";
 
-        function checkout() {
-            Telegram.WebApp.showAlert("Переход к оплате: " + cart.length + " услуг");
-        }
-    </script>
+      for (const srv of country.services) {
+        const key = `${activeCountry}:${srv.id}`;
+        const inCart = cart.has(key);
+
+        const card = document.createElement("div");
+        card.className = `p-4 rounded-2xl border transition ${
+          inCart ? "bg-neutral-900 border-orange-500/70" : "bg-neutral-900/70 border-neutral-800"
+        }`;
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h2 class="font-semibold text-base text-white">${srv.title}</h2>
+              <p class="text-xs text-neutral-400 mt-1 leading-relaxed">${srv.desc}</p>
+            </div>
+            <div class="text-right shrink-0">
+              <div class="font-bold text-orange-400">€${srv.priceEur}</div>
+            </div>
+          </div>
+          <div class="mt-3 flex justify-end">
+            <button type="button" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+              inCart
+                ? "bg-orange-500/20 text-orange-300 border border-orange-500/40"
+                : "bg-neutral-800 text-white hover:bg-neutral-700"
+            }">
+              ${inCart ? "В корзине ✓" : "Добавить"}
+            </button>
+          </div>
+        `;
+
+        card.querySelector("button").onclick = () => {
+          if (cart.has(key)) {
+            cart.delete(key);
+          } else {
+            cart.set(key, {
+              id: srv.id,
+              countryCode: activeCountry,
+              countryName: country.name,
+              title: srv.title,
+              priceEur: srv.priceEur
+            });
+          }
+          renderServices();
+          renderCart();
+        };
+
+        servicesEl.appendChild(card);
+      }
+    }
+
+    function renderCart() {
+      const items = Array.from(cart.values());
+      if (!items.length) {
+        cartBarEl.classList.add("hidden");
+        if (tg?.MainButton) tg.MainButton.hide();
+        return;
+      }
+
+      const totalEur = items.reduce((sum, x) => sum + x.priceEur, 0);
+      cartCountEl.textContent = `${items.length} шт.`;
+      cartTotalEl.textContent = `€${totalEur}`;
+      cartBarEl.classList.remove("hidden");
+
+      if (tg?.MainButton) {
+        tg.MainButton.setText(`Оплатить · €${totalEur}`);
+        tg.MainButton.show();
+        tg.MainButton.onClick(submitOrder);
+      }
+    }
+
+    function submitOrder() {
+      const items = Array.from(cart.values());
+      if (!items.length) return;
+      const totalEur = items.reduce((sum, x) => sum + x.priceEur, 0);
+
+      const payload = JSON.stringify({
+        items,
+        totalEur,
+        currency: "EUR"
+      });
+
+      if (tg && tg.initDataUnsafe?.user) {
+        tg.sendData(payload);
+      } else {
+        alert("Заказ сформирован:\n" + payload);
+      }
+    }
+
+    checkoutBtn.onclick = submitOrder;
+
+    renderCountries();
+    renderServices();
+    renderCart();
+  </script>
 </body>
 </html>
