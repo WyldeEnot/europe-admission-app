@@ -10,19 +10,22 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Unbounded:wght@600;700&display=swap" rel="stylesheet" />
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<!-- Карта рисуется самим сайтом из бесплатных открытых данных: ключи и регистрация не нужны -->
+<!-- Карта мира рисуется самим сайтом из бесплатных открытых данных: ключи и регистрация не нужны -->
 <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<!-- Тексты гайдов (перенесены из присланного файла без изменений) -->
+<script src="guides.js"></script>
 
 <style>
   :root {
     --bg: #0a0a0a;
-    --panel: rgba(10, 10, 10, .86);
-    --card: rgba(23, 23, 23, .92);
+    --panel: rgba(10, 10, 10, .88);
+    --card: rgba(23, 23, 23, .94);
+    --line: #27272a;
     --orange: #f97316;
     --orange-hi: #ffb066;
     --orange-soft: rgba(249, 115, 22, .5);
-    --orange-bg: rgba(249, 115, 22, .16);
+    --orange-bg: rgba(249, 115, 22, .15);
     --text: #f4f4f5;
     --muted: #a1a1aa;
     --safe-top: 0px;
@@ -30,15 +33,17 @@
     --bar-h: 0px;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text);
-    font-family: Inter, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  html, body { height: 100%; width: 100%; margin: 0; background: var(--bg); color: var(--text);
+    font-family: Inter, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden; overscroll-behavior: none; }
   button { font-family: inherit; color: inherit; }
   button:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+  h1, h2 { font-family: Unbounded, Inter, sans-serif; letter-spacing: -.01em; margin: 0; }
 
-  /* ---------- карта ---------- */
+  /* ---------- карта мира ---------- */
   #map { position: fixed; inset: 0; background: var(--bg); touch-action: none; }
   #map svg { display: block; overflow: hidden; }
-  .grat { fill: none; stroke: rgba(249, 115, 22, .09); stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .grat { fill: none; stroke: rgba(249, 115, 22, .08); stroke-width: 1; vector-effect: non-scaling-stroke; }
   .land { fill: #101010; stroke: rgba(249, 115, 22, .32); stroke-width: 1; vector-effect: non-scaling-stroke; }
   .land.pick { fill: var(--orange-bg); stroke: var(--orange); stroke-width: 1.4; cursor: pointer; transition: fill .2s; }
   .land.pick:hover { fill: rgba(249, 115, 22, .28); }
@@ -51,12 +56,12 @@
   .map-state button { pointer-events: auto; margin-top: 12px; padding: 10px 18px; border-radius: 12px;
     background: var(--card); border: 1.5px solid var(--orange); cursor: pointer; }
   .vignette { position: fixed; inset: 0; pointer-events: none;
-    background: radial-gradient(ellipse at 60% 50%, transparent 40%, rgba(10,10,10,.8) 100%); }
+    background: radial-gradient(ellipse at 60% 50%, transparent 45%, rgba(10,10,10,.75) 100%); }
 
-  /* ---------- список стран (компактный, сворачивается) ---------- */
-  .panel { position: fixed; z-index: 5; left: 10px; width: clamp(148px, 38vw, 250px);
+  /* ---------- список стран (компактный, сворачивается, не сдвигается вбок) ---------- */
+  .panel { position: fixed; z-index: 5; left: 10px; width: clamp(172px, 52vw, 260px);
     top: calc(var(--safe-top) + 10px);
-    max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - var(--bar-h) - 20px);
+    max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - var(--bar-h) - 22px);
     display: flex; flex-direction: column; overflow: hidden;
     background: var(--panel); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
     border: 1.5px solid var(--orange); border-radius: 16px;
@@ -65,102 +70,174 @@
     background: none; border: 0; text-align: left; cursor: pointer; }
   .head .t { flex: 1; min-width: 0; }
   .head strong { display: block; font-size: 14px; }
-  .head small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 1px; }
+  .head small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 1px; line-height: 1.3; }
   .head .count { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--orange);
     color: #0a0a0a; font-size: 12px; font-weight: 700; display: none; place-items: center; }
   .head .count.on { display: grid; }
   .head .chev { color: var(--orange); font-size: 12px; transition: transform .2s; }
   .panel.collapsed .chev { transform: rotate(-90deg); }
-  .list { overflow-y: auto; padding: 0 8px 8px; display: grid; gap: 6px; align-content: start;
+  .list { overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; touch-action: pan-y;
+    padding: 0 8px 8px; display: grid; gap: 6px; align-content: start; min-width: 0;
     scrollbar-width: thin; scrollbar-color: var(--orange-soft) transparent; }
   .panel.collapsed .list { display: none; }
-  .row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; cursor: pointer;
+  .row { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; text-align: left; cursor: pointer;
     padding: 7px 9px; border-radius: 11px; background: var(--card); border: 1px solid var(--orange-soft);
     transition: background .15s, border-color .15s, transform .1s; }
   .row:active { transform: scale(.98); }
   .row.on { background: var(--orange-bg); border-color: var(--orange); box-shadow: 0 0 10px rgba(249,115,22,.3); }
+  .row.eu { border-color: var(--orange); }
   .row .f { flex: none; font-size: 22px; line-height: 1; }
-  .row .n { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .tx { flex: 1; min-width: 0; }
+  .row .n { display: block; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .s { display: block; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row.on .s { color: var(--orange-hi); }
   .row .m { flex: none; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--orange-soft);
     display: grid; place-items: center; font-size: 11px; font-weight: 700; color: transparent; transition: .15s; }
   .row.on .m { background: var(--orange); border-color: var(--orange); color: #0a0a0a; }
+  @media (max-width: 600px) { .row .m { display: none; } }
 
-  /* кнопка «о нас» */
-  .info-btn { position: fixed; z-index: 5; right: 10px; top: calc(var(--safe-top) + 10px);
-    width: 38px; height: 38px; border-radius: 50%; cursor: pointer; font-weight: 700; font-size: 17px;
-    background: var(--panel); border: 1.5px solid var(--orange); color: var(--orange);
-    box-shadow: 0 0 16px rgba(249,115,22,.25); }
-
-  /* ---------- корзина ---------- */
+  /* ---------- нижняя панель: корзина и меню ---------- */
   .bar { position: fixed; z-index: 6; left: 10px; right: 10px; bottom: calc(var(--safe-bottom) + 10px);
     background: var(--panel); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-    border: 1.5px solid var(--orange); border-radius: 18px; padding: 10px 12px;
-    box-shadow: 0 0 26px rgba(249, 115, 22, .25);
-    transform: translateY(170%); transition: transform .3s cubic-bezier(.2, .9, .3, 1); }
-  .bar.show { transform: none; }
-  .bar-in { max-width: 560px; margin: 0 auto; display: flex; align-items: center; gap: 10px; }
-  .chips { flex: 1; min-width: 0; display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none; font-size: 22px; }
+    border: 1.5px solid var(--orange); border-radius: 18px; padding: 8px 10px;
+    box-shadow: 0 0 26px rgba(249, 115, 22, .25); }
+  .cartrow { display: none; align-items: center; gap: 10px; padding: 2px 0 8px; max-width: 560px; margin: 0 auto; }
+  .cartrow.on { display: flex; }
+  .chips { flex: 1; min-width: 0; display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none; }
   .chips::-webkit-scrollbar { display: none; }
-  .chip { flex: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 20px; line-height: 1;
+  .chip { flex: none; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; font-size: 19px; line-height: 1;
     background: var(--bg); border: 1.5px solid var(--orange); }
   .tot { flex: none; text-align: right; line-height: 1.2; }
   .tot small { display: block; color: var(--muted); font-size: 11.5px; }
   .tot strong { font-size: 16px; }
+  .tot s { color: var(--muted); font-weight: 500; font-size: 12px; margin-right: 4px; }
+  .nudge { display: none; text-align: center; font-size: 12px; color: var(--orange-hi); padding: 0 0 8px; }
+  .nudge.on { display: block; }
+  .menu { display: flex; gap: 8px; max-width: 560px; margin: 0 auto; }
+  .mbtn { flex: 1; min-width: 0; padding: 8px 6px; border-radius: 12px; cursor: pointer; font-size: 12.5px; font-weight: 600; line-height: 1.2;
+    background: transparent; border: 1.5px solid var(--orange-soft); }
+  .mbtn:active { background: var(--orange-bg); }
+  .mbtn .pill { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 4px;
+    border-radius: 9px; background: var(--orange); color: #0a0a0a; font-size: 11px; }
+  .mbtn .pill[hidden] { display: none; }
   .btn { flex: none; padding: 12px 18px; border-radius: 13px; cursor: pointer; font-weight: 700; font-size: 15px;
     background: var(--orange); color: #0a0a0a; border: 1.5px solid var(--orange);
     box-shadow: 0 0 16px rgba(249, 115, 22, .45); transition: transform .1s, background .15s; }
   .btn:active { transform: scale(.97); background: #ea580c; }
   .btn.ghost { background: transparent; color: var(--text); box-shadow: none; border-color: var(--orange-soft); }
 
-  /* ---------- экраны-накладки (заставка и «что вы получите») ---------- */
+  /* ---------- экраны-накладки ---------- */
   .screen { position: fixed; inset: 0; z-index: 20; background: var(--bg); display: flex; flex-direction: column;
     opacity: 0; visibility: hidden; transform: translateY(14px);
     transition: opacity .3s, transform .3s, visibility 0s .3s; }
   .screen.show { opacity: 1; visibility: visible; transform: none; transition: opacity .3s, transform .3s; }
-  .screen .scroll { flex: 1; overflow-y: auto; padding: calc(var(--safe-top) + 22px) 18px 24px; }
-  .screen .foot { padding: 12px 18px calc(var(--safe-bottom) + 14px); border-top: 1.5px solid var(--orange-soft);
+  .screen .scroll { flex: 1; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
+    padding: calc(var(--safe-top) + 20px) 16px 24px; }
+  .screen .foot { padding: 12px 16px calc(var(--safe-bottom) + 14px); border-top: 1.5px solid var(--orange-soft);
     background: var(--bg); display: flex; gap: 10px; align-items: center; }
   .screen .foot .btn { flex: 1; }
-  .wrap { max-width: 520px; margin: 0 auto; }
+  .wrap { max-width: 560px; margin: 0 auto; min-width: 0; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; color: var(--orange); background: var(--orange-bg);
+    padding: 3px 9px; border-radius: 6px; margin-bottom: 10px; }
 
-  /* заставка */
-  #splash { background: radial-gradient(ellipse at 50% -10%, rgba(249,115,22,.28), transparent 60%), var(--bg); z-index: 30; }
-  .logo { width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--orange); display: grid; place-items: center;
-    font-size: 30px; box-shadow: 0 0 28px rgba(249,115,22,.5), inset 0 0 18px rgba(249,115,22,.25); margin-bottom: 18px; }
-  h1, h2 { font-family: Unbounded, Inter, sans-serif; letter-spacing: -.01em; margin: 0; }
+  /* заставка-меню */
+  #splash { background: radial-gradient(ellipse at 50% -10%, rgba(249,115,22,.26), transparent 60%), var(--bg); z-index: 30; }
   h1 { font-size: 30px; line-height: 1.1; }
-  .tag { color: var(--muted); font-size: 16px; line-height: 1.45; margin: 12px 0 26px; }
-  h2 { font-size: 16px; margin: 0 0 10px; }
+  .lead { color: var(--muted); font-size: 15.5px; line-height: 1.5; margin: 12px 0 22px; }
+  h2.s { font-size: 16px; margin: 0 0 10px; }
   .block { border: 1.5px solid var(--orange-soft); border-radius: 18px; padding: 14px 16px; margin-bottom: 14px; background: var(--card); }
   .block p { margin: 0; color: #d4d4d8; font-size: 14.5px; line-height: 1.55; }
-  .feat { display: flex; gap: 12px; padding: 12px 0; }
-  .feat + .feat { border-top: 1px solid rgba(249,115,22,.25); }
-  .feat .i { flex: none; width: 40px; height: 40px; border-radius: 12px; border: 1.5px solid var(--orange);
-    display: grid; place-items: center; font-size: 19px; background: var(--orange-bg); }
-  .feat b { display: block; font-size: 14.5px; margin-bottom: 2px; }
-  .feat span { color: var(--muted); font-size: 13.5px; line-height: 1.45; }
-  .steps { display: grid; gap: 8px; }
-  .steps div { display: flex; align-items: center; gap: 12px; font-size: 14.5px; }
-  .steps i { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--orange); color: #0a0a0a;
-    display: grid; place-items: center; font-style: normal; font-weight: 700; font-size: 13px; }
-  .price-note { text-align: center; color: var(--muted); font-size: 13.5px; margin-top: 4px; }
-  .price-note b { color: var(--orange); }
+  .block p + p { margin-top: 8px; }
+  .inc { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .inc li { display: flex; gap: 10px; font-size: 14.5px; line-height: 1.4; color: #e4e4e7; }
+  .inc li::before { content: "✓"; color: var(--orange); font-weight: 700; flex: none; }
+  .bonus { border: 1.5px solid var(--orange); border-radius: 18px; padding: 14px 16px; margin-bottom: 14px;
+    background: linear-gradient(135deg, rgba(249,115,22,.22), rgba(249,115,22,.06));
+    box-shadow: 0 0 20px rgba(249,115,22,.25); }
+  .bonus b { display: block; font-size: 15.5px; margin-bottom: 4px; }
+  .bonus span { display: block; font-size: 14px; line-height: 1.5; color: #e4e4e7; }
+  .prices { display: grid; gap: 8px; }
+  .prices div { display: flex; justify-content: space-between; gap: 12px; font-size: 14.5px; }
+  .prices div b { color: var(--orange); white-space: nowrap; }
+  .fine { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 10px 0 0; }
 
   /* что вы получите */
   .rcard { border: 1.5px solid var(--orange); border-radius: 18px; padding: 14px 16px; margin-bottom: 12px;
     background: var(--card); box-shadow: 0 0 14px rgba(249,115,22,.15); }
-  .rhead { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .rhead { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
   .rhead .f { font-size: 28px; line-height: 1; }
-  .rhead .n { flex: 1; font-weight: 700; font-size: 16px; }
-  .rhead .p { color: var(--orange); font-weight: 700; }
-  .rhead .x { width: 28px; height: 28px; border-radius: 50%; background: none; border: 1.5px solid var(--orange-soft);
+  .rhead .n { flex: 1; min-width: 0; font-weight: 700; font-size: 16px; }
+  .rhead .p { color: var(--orange); font-weight: 700; white-space: nowrap; }
+  .rhead .x { flex: none; width: 28px; height: 28px; border-radius: 50%; background: none; border: 1.5px solid var(--orange-soft);
     cursor: pointer; color: var(--muted); font-size: 14px; }
-  .rcard ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-  .rcard li { display: flex; gap: 8px; font-size: 14px; color: #d4d4d8; line-height: 1.4; }
-  .rcard li::before { content: "✓"; color: var(--orange); font-weight: 700; }
-  .delivery { border: 1.5px dashed var(--orange-soft); border-radius: 18px; padding: 14px 16px; margin: 4px 0 14px; }
-  .delivery p { margin: 0; font-size: 14px; line-height: 1.55; color: #d4d4d8; }
-  .foot .tot { padding-right: 4px; }
+  .rcard .cap { font-size: 12.5px; color: var(--muted); margin: 0 0 6px; }
+  .rbonus { margin-top: 12px; border: 1.5px dashed var(--orange); border-radius: 14px; padding: 10px 12px;
+    background: var(--orange-bg); }
+  .rbonus b { display: block; font-size: 14px; margin-bottom: 3px; }
+  .rbonus span { display: block; font-size: 13px; line-height: 1.45; color: #e4e4e7; }
+  .unis { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .unis i { font-style: normal; font-size: 12px; padding: 3px 8px; border-radius: 8px; border: 1px solid var(--orange-soft); background: var(--bg); }
+  .sum { border: 1.5px solid var(--orange-soft); border-radius: 18px; padding: 12px 16px; margin: 4px 0 14px; display: grid; gap: 6px; }
+  .sum div { display: flex; justify-content: space-between; gap: 12px; font-size: 14.5px; }
+  .sum .disc { color: var(--orange-hi); }
+  .sum .total { border-top: 1px solid var(--orange-soft); padding-top: 8px; margin-top: 2px; font-weight: 700; font-size: 16px; }
+  .note { border: 1.5px dashed var(--orange-soft); border-radius: 18px; padding: 12px 16px; margin-bottom: 14px; }
+  .note p { margin: 0; font-size: 14px; line-height: 1.55; color: #d4d4d8; }
+
+  /* оплаченные страны */
+  .pcard { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; cursor: pointer;
+    border: 1.5px solid var(--orange); border-radius: 18px; padding: 14px 16px; margin-bottom: 12px;
+    background: var(--card); box-shadow: 0 0 14px rgba(249,115,22,.15); min-width: 0; }
+  .pcard:active { background: var(--orange-bg); }
+  .pcard .f { font-size: 34px; line-height: 1; flex: none; }
+  .pcard .tx { flex: 1; min-width: 0; }
+  .pcard .n { display: block; font-weight: 700; font-size: 16px; }
+  .pcard .s { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+  .pcard .go { color: var(--orange); font-size: 20px; flex: none; }
+  .empty { text-align: center; color: var(--muted); font-size: 14.5px; line-height: 1.5; padding: 30px 10px; }
+
+  /* просмотр гайда */
+  .ghead { display: flex; align-items: center; gap: 10px; padding: calc(var(--safe-top) + 10px) 16px 10px;
+    border-bottom: 1.5px solid var(--orange-soft); background: var(--bg); }
+  .ghead button { flex: none; padding: 8px 12px; border-radius: 12px; border: 1.5px solid var(--orange-soft);
+    background: none; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .ghead strong { flex: 1; min-width: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gtabs, .stabs, .pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 18px; }
+  .gtabs button, .stabs button, .pills button { padding: 8px 12px; border-radius: 12px; cursor: pointer; font-size: 13.5px; font-weight: 600;
+    background: transparent; border: 1.5px solid var(--orange-soft); transition: .15s; }
+  .stabs button { font-size: 13px; padding: 7px 10px; }
+  .gtabs button.active, .stabs button.active, .pills button.active { background: var(--orange); border-color: var(--orange); color: #0a0a0a; }
+  .bonus-note { border: 1.5px solid var(--orange); border-radius: 14px; padding: 10px 14px; margin: 0 0 14px;
+    background: var(--orange-bg); font-size: 14px; line-height: 1.5; }
+
+  /* текст гайда */
+  .guide { font-size: 15px; line-height: 1.65; color: #e6e9ef; overflow-wrap: anywhere; min-width: 0; }
+  .guide h2 { font-size: 18px; line-height: 1.3; margin: 34px 0 12px; }
+  .guide > h2:first-child, .guide .tag + h2 { margin-top: 0; }
+  .guide h3 { font-family: Inter, sans-serif; font-size: 15.5px; margin: 26px 0 8px; color: var(--orange); font-weight: 600; }
+  .guide p { margin: 0 0 14px; }
+  .guide ul, .guide ol { margin: 0 0 16px; padding-left: 22px; }
+  .guide li { margin-bottom: 8px; }
+  .guide strong { color: #fff; font-weight: 600; }
+  .guide em { color: #d4d4d8; }
+  .guide .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 0 0 18px; }
+  .guide .card.hint { border-left: 3px solid var(--orange); background: rgba(249,115,22,.07); }
+  .guide .card.muted { background: transparent; border-style: dashed; }
+  .guide .card.warn { border-left: 3px solid #fbbf24; background: rgba(251,191,36,.06); }
+  .guide .example { margin: 0 0 16px; padding: 14px 16px; background: #131315; border-radius: 12px; border: 1px solid var(--line); }
+  .guide .example .bad { color: #f87171; display: block; margin-bottom: 6px; }
+  .guide .example .good { color: #6ee7b7; display: block; margin-bottom: 6px; }
+  .guide .example .why { color: var(--muted); font-size: 14px; font-style: italic; display: block; margin-top: 6px; }
+  .guide blockquote { margin: 0 0 16px; padding: 14px 16px; background: #131315; border-left: 3px solid var(--orange-soft);
+    border-radius: 0 12px 12px 0; font-size: 14.5px; white-space: pre-line; }
+  .guide .checklist { list-style: none; padding-left: 0; }
+  .guide .checklist li { position: relative; padding-left: 30px; margin-bottom: 10px; }
+  .guide .checklist li::before { content: ""; position: absolute; left: 0; top: 5px; width: 16px; height: 16px;
+    border: 2px solid var(--orange); border-radius: 4px; }
+  .guide .tw { overflow-x: auto; margin: 0 0 20px; }
+  .guide table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .guide th, .guide td { text-align: left; padding: 8px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .guide th { color: var(--muted); font-weight: 600; font-size: 13px; }
 
   .toast { position: fixed; z-index: 99; left: 50%; top: calc(var(--safe-top) + 14px);
     transform: translate(-50%, -160%); max-width: 90vw; padding: 10px 16px; border-radius: 14px; text-align: center;
@@ -173,57 +250,72 @@
 </head>
 <body>
 
-<div id="map" aria-label="Карта Европы"></div>
+<div id="map" aria-label="Карта мира"></div>
 <div class="vignette"></div>
 <div class="map-state" id="mapState">Загружаем карту…</div>
 
 <aside class="panel" id="panel">
   <button class="head" id="panelHead" type="button" aria-expanded="true">
-    <span class="t"><strong>Страны</strong><small>249 ₽ за страну</small></span>
+    <span class="t"><strong>Страны</strong><small>249 ₽ · скидки от 2 стран</small></span>
     <span class="count" id="count">0</span>
     <span class="chev">▼</span>
   </button>
   <div class="list" id="list"></div>
 </aside>
 
-<button class="info-btn" id="infoBtn" type="button" aria-label="О компании">i</button>
-
 <div class="bar" id="bar">
-  <div class="bar-in">
+  <div class="cartrow" id="cartRow">
     <div class="chips" id="chips"></div>
     <div class="tot"><small id="barCount"></small><strong id="barTotal"></strong></div>
     <button class="btn" id="next" type="button">Далее</button>
+  </div>
+  <div class="nudge" id="nudge"></div>
+  <div class="menu">
+    <button class="mbtn" id="aboutBtn" type="button">О нас</button>
+    <button class="mbtn" id="paidBtn" type="button">Оплаченные страны<span class="pill" id="paidPill" hidden></span></button>
   </div>
 </div>
 
 <!-- ЗАСТАВКА / МЕНЮ -->
 <section class="screen show" id="splash">
   <div class="scroll"><div class="wrap">
-    <div class="logo">🇪🇺</div>
     <h1>Euro Admissions</h1>
-    <p class="tag">Документы для поступления в вузы Европы для граждан России. Выберите страны и получите готовые списки в чате.</p>
+    <p class="lead">Стратегия поступления в вузы Европы для граждан России: по каждой стране отдельный подробный гайд.</p>
 
     <div class="block">
-      <h2>О нас</h2>
-      <p>Мы собираем списки вузов и документов, которые нужны для поступления в европейские университеты, и отдаём их в одном сообщении. Вам не нужно искать требования на десятках сайтов.</p>
+      <h2 class="s">О нас</h2>
+      <p>Euro Admissions — это готовые гайды по поступлению за границу. Вы выбираете страны, которые рассматриваете, а при оплате каждой из них получаете гайд (стратегию) по основным аспектам поступления: от документов до логистики.</p>
     </div>
 
     <div class="block">
-      <h2>Что мы предоставляем</h2>
-      <div class="feat"><div class="i">🏛</div><div><b>Список вузов страны</b><span>Университеты выбранной страны, куда можно поступать.</span></div></div>
-      <div class="feat"><div class="i">📄</div><div><b>Документы по каждому вузу</b><span>Что именно нужно собрать для конкретного вуза.</span></div></div>
-      <div class="feat"><div class="i">🎓</div><div><b>Разбивка по направлениям</b><span>Требования для разных направлений подготовки.</span></div></div>
+      <h2 class="s">Что входит в гайд по стране</h2>
+      <ul class="inc" id="splashInc"></ul>
+    </div>
+
+    <div class="bonus">
+      <b>🎁 Бонус: вузы в подарок</b>
+      <span>В гайды по отдельным странам добавлены 5 вузов с подробным разбором бакалавриата и магистратуры. Они уже включены в стоимость и достаются вам бонусом к основному гайду.</span>
     </div>
 
     <div class="block">
-      <h2>Как это работает</h2>
-      <div class="steps">
-        <div><i>1</i>Выберите страны на карте</div>
-        <div><i>2</i>Оплатите заказ</div>
-        <div><i>3</i>Получите списки в чате Telegram</div>
+      <h2 class="s">Цены и скидки</h2>
+      <div class="prices">
+        <div><span>Гайд по одной стране</span><b>249 ₽</b></div>
+        <div><span>Две страны в корзине</span><b>скидка 20%</b></div>
+        <div><span>Три страны и больше</span><b>скидка 30%</b></div>
+        <div><span>Общий гайд для всего ЕС</span><b>99 ₽</b></div>
       </div>
+      <p class="fine">Скидка не бывает больше 30%. Она считается на страны, общий гайд по ЕС стоит 99 ₽ без скидки.</p>
     </div>
-    <p class="price-note">Стоимость: <b>249 ₽</b> за одну страну</p>
+
+    <div class="block">
+      <h2 class="s">Как это работает</h2>
+      <ul class="inc">
+        <li>Выберите страны на карте или в списке</li>
+        <li>Оплатите заказ</li>
+        <li>Купленные страны появятся в разделе «Оплаченные страны»</li>
+      </ul>
+    </div>
   </div></div>
   <div class="foot"><button class="btn" id="start" type="button">Выбрать страны</button></div>
 </section>
@@ -232,9 +324,10 @@
 <section class="screen" id="review">
   <div class="scroll"><div class="wrap">
     <h2 style="font-size:22px;margin-bottom:6px">Что вы получите</h2>
-    <p class="tag" style="margin:0 0 18px;font-size:14.5px">Проверьте выбранные страны. После оплаты для каждой из них придёт полный комплект.</p>
+    <p class="lead" style="margin:0 0 18px;font-size:14.5px">Проверьте заказ. Основной продукт: гайд со стратегией поступления. Вузы внутри страны идут в подарок.</p>
     <div id="reviewList"></div>
-    <div class="delivery"><p>Сразу после оплаты бот пришлёт всё в чат Telegram: сначала список вузов выбранных стран, затем документы по каждому вузу и направлению.</p></div>
+    <div class="sum" id="sum"></div>
+    <div class="note"><p>После оплаты купленные гайды появятся в разделе «Оплаченные страны». Там у каждой страны своя стратегия по разделам.</p></div>
   </div></div>
   <div class="foot">
     <button class="btn ghost" id="back" type="button" style="flex:none">Назад</button>
@@ -243,14 +336,35 @@
   </div>
 </section>
 
+<!-- ОПЛАЧЕННЫЕ СТРАНЫ -->
+<section class="screen" id="paid">
+  <div class="scroll"><div class="wrap">
+    <h2 style="font-size:22px;margin-bottom:6px">Оплаченные страны</h2>
+    <p class="lead" style="margin:0 0 18px;font-size:14.5px">Откройте страну, чтобы прочитать стратегию поступления.</p>
+    <div id="paidList"></div>
+  </div></div>
+  <div class="foot"><button class="btn" id="paidBack" type="button">К карте</button></div>
+</section>
+
+<!-- ГАЙД -->
+<section class="screen" id="guide">
+  <div class="ghead"><button id="gBack" type="button">‹ Назад</button><strong id="gTitle"></strong></div>
+  <div class="scroll" id="gScroll"><div class="wrap">
+    <div class="gtabs" id="gTabs"></div>
+    <div class="guide" id="gBody"></div>
+  </div></div>
+</section>
+
 <div class="toast" id="toast"></div>
 
 <script>
 /* =====================================================================
-   КАТАЛОГ. Здесь правятся страны и цена.
-   emoji — флаг, geo — название страны в картографических данных (английское).
+   КАТАЛОГ. Страны и цены правятся здесь.
+   geo — название страны в картографических данных (английское).
+   Страна доступна к покупке, если для неё есть гайд в guides.js.
    ===================================================================== */
-const PRICE = 249;
+const PRICE = 249;       // одна страна
+const EU_PRICE = 99;     // общий гайд для ЕС (скидка на него не действует)
 const COUNTRIES = [
   { id: "italy",       name: "Италия",          flag: "🇮🇹", geo: "Italy" },
   { id: "france",      name: "Франция",         flag: "🇫🇷", geo: "France" },
@@ -264,7 +378,19 @@ const COUNTRIES = [
   { id: "switzerland", name: "Швейцария",       flag: "🇨🇭", geo: "Switzerland" },
   { id: "sweden",      name: "Швеция",          flag: "🇸🇪", geo: "Sweden" }
 ];
+const G = window.GUIDES || { base: { tabs: [], sections: {} }, countries: {} };
+const hasGuide = id => !!G.countries[id];   // есть ли гайд в базе guides.js
 const byGeo = Object.fromEntries(COUNTRIES.map(c => [c.geo, c]));
+const byId = Object.fromEntries(COUNTRIES.map(c => [c.id, c]));
+const LABELS = {
+  cv: "Нюансы написания резюме", ml: "Мотивационное письмо", rl: "Рекомендательные письма",
+  exams: "Необходимые экзамены", foundation: "Системы Foundation", logistics: "Логистика", final: "Финальный чек-лист"
+};
+const DEFAULT_INCLUDED = ["Нюансы написания резюме", "Мотивационное письмо", "Рекомендательные письма",
+  "Необходимые экзамены", "Системы Foundation и другое", "Логистика", "Вузы", "Финальный чек-лист"];
+const includedOf = key => hasGuide(key)
+  ? G.countries[key].tabs.filter(t => t.key !== "uni").map(t => LABELS[t.key] || t.label)
+  : DEFAULT_INCLUDED;
 
 /* ---------- Telegram (необязательно: сайт работает и без него) ---------- */
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -286,39 +412,58 @@ if (inTg) {
 }
 const haptic = t => { try { tg.HapticFeedback.impactOccurred(t); } catch (e) {} };
 
-/* ---------- утилиты ---------- */
+/* ---------- состояние и утилиты ---------- */
 const $ = id => document.getElementById(id);
 const fmt = n => new Intl.NumberFormat("ru-RU").format(n) + " ₽";
-const cart = new Set();
-const selected = () => COUNTRIES.filter(c => cart.has(c.id));
+const cart = new Set();           // выбранные страны
+let eu = false;                   // выбран общий гайд по ЕС
+const paid = new Set();           // оплаченные страны
+let paidEu = false;
 const plural = n => (n % 10 === 1 && n % 100 !== 11) ? "страна"
   : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) ? "страны" : "стран";
 let toastTimer;
 function toast(text) {
   const t = $("toast"); t.textContent = text; t.classList.add("show");
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 2800);
+}
+function selectedCountries() { return COUNTRIES.filter(c => cart.has(c.id)); }
+
+/* Скидка: 2 страны −20%, 3 и больше −30% (максимум). На общий гайд ЕС не действует. */
+function pricing() {
+  const n = cart.size;
+  const rate = n >= 3 ? 0.3 : n === 2 ? 0.2 : 0;
+  const sub = n * PRICE;
+  const disc = Math.round(sub * rate);
+  const euSum = eu ? EU_PRICE : 0;
+  return { n, rate, sub, disc, euSum, total: sub - disc + euSum, any: n > 0 || eu, before: sub + euSum };
 }
 
 /* ---------- экраны ---------- */
+const SCREENS = ["splash", "review", "paid", "guide"];
 let screen = "splash";
-function show(name) {
+function go(name) {
   screen = name;
-  $("splash").classList.toggle("show", name === "splash");
-  $("review").classList.toggle("show", name === "review");
-  if (inTg) { try { name === "review" ? tg.BackButton.show() : tg.BackButton.hide(); } catch (e) {} }
+  SCREENS.forEach(n => $(n).classList.toggle("show", n === name));
+  if (inTg) { try { (name === "map" || name === "splash") ? tg.BackButton.hide() : tg.BackButton.show(); } catch (e) {} }
 }
-if (inTg) { try { tg.BackButton.onClick(() => show("map")); } catch (e) {} }
-$("start").onclick = () => show("map");
-$("infoBtn").onclick = () => show("splash");
-$("back").onclick = () => show("map");
-$("next").onclick = () => { renderReview(); show("review"); haptic("medium"); };
+function back() { go(screen === "guide" ? "paid" : "map"); }
+if (inTg) { try { tg.BackButton.onClick(back); } catch (e) {} }
 
-/* ---------- карта (рисуется из открытых данных, без API-ключей) ---------- */
+$("start").onclick = () => go("map");
+$("aboutBtn").onclick = () => go("splash");
+$("paidBtn").onclick = () => { renderPaid(); go("paid"); };
+$("paidBack").onclick = () => go("map");
+$("back").onclick = () => go("map");
+$("gBack").onclick = () => go("paid");
+$("next").onclick = () => { renderReview(); go("review"); haptic("medium"); };
+
+/* ---------- карта мира (рисуется из открытых данных, без API-ключей) ---------- */
 const TOPO_URLS = [
   "https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-50m.json",
   "https://unpkg.com/world-atlas@2.0.2/countries-50m.json"
 ];
-let topo = null, svg, root, projection, zoomer, centers = {}, picks, badgesG, curK = 1;
+let topo = null, svg, root, projection, pathGen, zoomer, picks, badgesG, curK = 1;
+const centers = {}, bounds = {};
 
 async function loadTopo() {
   for (const u of TOPO_URLS) {
@@ -326,28 +471,41 @@ async function loadTopo() {
   }
   throw new Error("map");
 }
-
-function labelPoint(f) {
+function mainShape(f) {                       // самый большой кусок страны (без заморских территорий)
   const g = f.geometry;
-  let shape = f;
-  if (g.type === "MultiPolygon") {            // берём самый большой кусок страны (без заморских территорий)
-    let best = null, area = -1;
-    g.coordinates.forEach(c => {
-      const poly = { type: "Polygon", coordinates: c }, a = d3.geoArea(poly);
-      if (a > area) { area = a; best = poly; }
-    });
-    shape = best;
-  }
-  return projection(d3.geoCentroid(shape));
+  if (g.type !== "MultiPolygon") return f;
+  let best = null, area = -1;
+  g.coordinates.forEach(c => {
+    const poly = { type: "Polygon", coordinates: c }, a = d3.geoArea(poly);
+    if (a > area) { area = a; best = poly; }
+  });
+  return best;
 }
-
-function visibleCenterX() {
-  const right = $("panel").getBoundingClientRect().right + 8;
-  return right + (innerWidth - right) / 2;
+function visibleBox() {                       // видимая область карты правее списка и выше нижней панели
+  const left = $("panel").getBoundingClientRect().right + 8;
+  const top = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-top")) || 0;
+  const barH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--bar-h")) || 0;
+  const w = Math.max(120, innerWidth - left - 8);
+  const h = Math.max(160, innerHeight - top - barH - 24);
+  return { cx: left + w / 2, cy: top + 10 + h / 2, w, h };
 }
 function focusOn(x, y, k, animate) {
-  const t = d3.zoomIdentity.translate(visibleCenterX() - k * x, (innerHeight - 40) / 2 - k * y).scale(k);
+  const v = visibleBox();
+  const t = d3.zoomIdentity.translate(v.cx - k * x, v.cy - k * y).scale(k);
   (animate ? svg.transition().duration(850) : svg).call(zoomer.transform, t);
+}
+function showEurope(animate) {
+  const a = projection([-11, 35]), b = projection([30, 62]), v = visibleBox();
+  const w = Math.abs(b[0] - a[0]), h = Math.abs(a[1] - b[1]);
+  const k = Math.max(1, Math.min(14, Math.min(v.w * 0.9 / w, v.h * 0.85 / h)));
+  const c = projection([9, 49]);
+  focusOn(c[0], c[1], k, animate);
+}
+function flyTo(id) {
+  const b = bounds[id]; if (!b || !svg) return;
+  const v = visibleBox(), w = b[1][0] - b[0][0], h = b[1][1] - b[0][1];
+  const k = Math.max(2.5, Math.min(14, 0.55 * Math.min(v.w / w, v.h / h)));
+  focusOn((b[0][0] + b[1][0]) / 2, (b[0][1] + b[1][1]) / 2, k, true);
 }
 
 function drawMap() {
@@ -357,35 +515,39 @@ function drawMap() {
   svg = d3.select(el).append("svg").attr("width", W).attr("height", H);
   root = svg.append("g");
 
-  const frame = { type: "MultiPoint", coordinates: [[-11, 35], [28, 35], [28, 62], [-11, 62]] };
-  projection = d3.geoMercator().fitExtent([[0, 0], [W, H]], frame);
-  const path = d3.geoPath(projection);
+  const world = topojson.feature(topo, topo.objects.countries).features.filter(f => f.properties.name !== "Antarctica");
+  const fc = { type: "FeatureCollection", features: world };
+  projection = d3.geoNaturalEarth1().fitExtent([[4, 4], [W - 4, H - 4]], fc);
+  pathGen = d3.geoPath(projection);
 
-  const all = topojson.feature(topo, topo.objects.countries).features;
-  const feats = all.filter(f => byGeo[f.properties.name] || f.properties.name === "Russia" ||
-    (c => c[0] > -32 && c[0] < 62 && c[1] > 24 && c[1] < 76)(d3.geoCentroid(f)));
+  root.append("path").datum(d3.geoGraticule10()).attr("class", "grat").attr("d", pathGen);
+  picks = root.append("g").selectAll("path").data(world).join("path")
+    .attr("d", pathGen)
+    .attr("class", d => { const c = byGeo[d.properties.name]; return "land" + (c ? " pick" : ""); })
+    .on("click", (e, d) => {
+      const c = byGeo[d.properties.name];
+      if (!c) return;
+      toggle(c.id, false);
+    });
 
-  root.append("path").datum(d3.geoGraticule10()).attr("class", "grat").attr("d", path);
-  picks = root.append("g").selectAll("path").data(feats).join("path")
-    .attr("d", path)
-    .attr("class", d => "land" + (byGeo[d.properties.name] ? " pick" : ""))
-    .on("click", (e, d) => { const c = byGeo[d.properties.name]; if (c) toggle(c.id, false); });
-
-  feats.forEach(f => { const c = byGeo[f.properties.name]; if (c) centers[c.id] = labelPoint(f); });
+  world.forEach(f => {
+    const c = byGeo[f.properties.name]; if (!c) return;
+    const shape = mainShape(f);
+    centers[c.id] = pathGen.centroid(shape);
+    bounds[c.id] = pathGen.bounds(shape);
+  });
   badgesG = root.append("g");
 
-  zoomer = d3.zoom().scaleExtent([1, 10])
-    .translateExtent([[-W, -H], [2 * W, 2 * H]])
+  const b = pathGen.bounds(fc);
+  zoomer = d3.zoom().scaleExtent([1, 16])
+    .translateExtent([[b[0][0] - 30, b[0][1] - 30], [b[1][0] + 30, b[1][1] + 30]])
     .on("zoom", e => { root.attr("transform", e.transform); curK = e.transform.k; placeBadges(); });
   svg.call(zoomer).on("dblclick.zoom", null);
 
-  const narrow = innerWidth < 700;
-  const [cx, cy] = projection([8, 49.5]);
-  focusOn(cx, cy, narrow ? 2.6 : 1.25, false);
+  showEurope(false);
   $("mapState").style.display = "none";
   paintSelection();
 }
-
 function placeBadges() {
   if (!badgesG) return;
   badgesG.selectAll("g.badge").attr("transform", d => `translate(${d.p[0]},${d.p[1]}) scale(${1 / curK})`);
@@ -393,7 +555,7 @@ function placeBadges() {
 function paintSelection() {
   if (!picks) return;
   picks.classed("sel", d => { const c = byGeo[d.properties.name]; return !!(c && cart.has(c.id)); });
-  const data = selected().filter(c => centers[c.id]).map(c => ({ c, p: centers[c.id] }));
+  const data = selectedCountries().filter(c => centers[c.id]).map(c => ({ c, p: centers[c.id] }));
   badgesG.selectAll("g.badge").data(data, d => d.c.id).join(enter => {
     const g = enter.append("g").attr("class", "badge");
     g.append("circle").attr("r", 17);
@@ -402,14 +564,11 @@ function paintSelection() {
   });
   placeBadges();
 }
-
 async function initMap() {
   $("mapState").style.display = "grid";
   $("mapState").innerHTML = "Загружаем карту…";
-  try {
-    topo = await loadTopo();
-    drawMap();
-  } catch (e) {
+  try { topo = await loadTopo(); drawMap(); }
+  catch (e) {
     $("mapState").innerHTML = `<div>Не удалось загрузить карту.<br>Страны всё равно можно выбрать в списке.<br><button id="retry" type="button">Повторить</button></div>`;
     $("retry").onclick = initMap;
   }
@@ -418,14 +577,14 @@ async function initMap() {
 /* ---------- список стран ---------- */
 function renderList() {
   const list = $("list"); list.innerHTML = "";
-  COUNTRIES.forEach(c => {
+  const mk = (cls, flag, name, sub, onclick, id) => {
     const row = document.createElement("button");
-    row.type = "button"; row.dataset.id = c.id;
-    row.className = "row" + (cart.has(c.id) ? " on" : "");
-    row.innerHTML = `<span class="f">${c.flag}</span><span class="n">${c.name}</span><span class="m">✓</span>`;
-    row.onclick = () => toggle(c.id, true);
-    list.appendChild(row);
-  });
+    row.type = "button"; row.className = "row " + cls; if (id) row.dataset.id = id; row.setAttribute("aria-pressed", String(cls.includes("on")));
+    row.innerHTML = `<span class="f">${flag}</span><span class="tx"><span class="n">${name}</span><span class="s">${sub}</span></span><span class="m">✓</span>`;
+    row.onclick = onclick; list.appendChild(row); return row;
+  };
+  mk("eu" + (eu ? " on" : ""), "🇪🇺", "Весь ЕС", `общий гайд · ${fmt(EU_PRICE)}`, toggleEu, "eu");
+  COUNTRIES.forEach(c => mk(cart.has(c.id) ? "on" : "", c.flag, c.name, fmt(PRICE), () => toggle(c.id, true), c.id));
 }
 $("panelHead").onclick = () => {
   const collapsed = $("panel").classList.toggle("collapsed");
@@ -434,74 +593,212 @@ $("panelHead").onclick = () => {
 
 /* ---------- корзина ---------- */
 function renderBar() {
-  const items = selected(), bar = $("bar");
-  const n = $("count"); n.textContent = items.length; n.classList.toggle("on", items.length > 0);
-  if (!items.length) {
-    bar.classList.remove("show");
-    document.documentElement.style.setProperty("--bar-h", "0px");
-    return;
+  const p = pricing(), bar = $("bar");
+  const n = $("count"); n.textContent = p.n + (eu ? 1 : 0); n.classList.toggle("on", p.any);
+  $("cartRow").classList.toggle("on", p.any);
+  if (p.any) {
+    const chips = $("chips"); chips.innerHTML = "";
+    const add = (flag, title, fn) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = flag; b.title = "Убрать: " + title; b.onclick = fn; chips.appendChild(b);
+    };
+    selectedCountries().forEach(c => add(c.flag, c.name, () => toggle(c.id, false)));
+    if (eu) add("🇪🇺", "Весь ЕС", toggleEu);
+    $("barCount").textContent = (p.n ? `${p.n} ${plural(p.n)}` : "") + (p.n && eu ? " + " : "") + (eu ? "гайд ЕС" : "");
+    $("barTotal").innerHTML = (p.disc > 0 ? `<s>${fmt(p.before)}</s>` : "") + fmt(p.total);
   }
-  $("barCount").textContent = `${items.length} ${plural(items.length)}`;
-  $("barTotal").textContent = fmt(items.length * PRICE);
-  const chips = $("chips"); chips.innerHTML = "";
-  items.forEach(c => {
-    const b = document.createElement("button");
-    b.type = "button"; b.className = "chip"; b.textContent = c.flag; b.title = "Убрать " + c.name;
-    b.onclick = () => toggle(c.id, false);
-    chips.appendChild(b);
-  });
-  bar.classList.add("show");
-  document.documentElement.style.setProperty("--bar-h", (bar.offsetHeight + 10) + "px");
+  const nudge = $("nudge");
+  const text = p.n === 1 ? "Добавьте ещё одну страну: скидка 20%"
+    : p.n === 2 ? "Скидка 20% применена. Ещё одна страна: скидка 30%"
+    : p.n >= 3 ? "Скидка 30% применена (это максимум)" : "";
+  nudge.textContent = text; nudge.classList.toggle("on", !!text);
+  const paidN = paid.size + (paidEu ? 1 : 0);
+  $("paidPill").hidden = !paidN; $("paidPill").textContent = paidN;
+  setBarHeight();
 }
-
+function setBarHeight() {
+  document.documentElement.style.setProperty("--bar-h", ($("bar").offsetHeight + 10) + "px");
+}
 function toggle(id, fly) {
-  const c = COUNTRIES.find(x => x.id === id);
   const adding = !cart.has(id);
   adding ? cart.add(id) : cart.delete(id);
   haptic("light");
   const row = document.querySelector(`.row[data-id="${id}"]`);
-  if (row) row.classList.toggle("on", adding);
-  paintSelection();
+  if (row) { row.classList.toggle("on", adding); row.setAttribute("aria-pressed", String(adding)); }
+  paintSelection(); renderBar();
+  if (adding && fly) flyTo(id);
+}
+function toggleEu() {
+  eu = !eu; haptic("light");
+  const row = document.querySelector('.row[data-id="eu"]'); if (row) row.classList.toggle("on", eu);
   renderBar();
-  if (adding && fly && centers[id]) focusOn(centers[id][0], centers[id][1], innerWidth < 700 ? 4 : 3.2, true);
+  if (eu && svg) showEurope(true);
+}
+
+/* ---------- заставка: динамические части ---------- */
+function renderSplash() {
+  const items = [
+    "Нюансы написания резюме", "Нюансы мотивационных и рекомендательных писем",
+    "Необходимые экзамены", "Системы Foundation и другое",
+    "Логистика", "Вузы страны", "Финальный чек-лист"
+  ];
+  $("splashInc").innerHTML = items.map(t => `<li>${t}</li>`).join("");
 }
 
 /* ---------- «что вы получите» ---------- */
 function renderReview() {
-  const items = selected();
-  $("reviewList").innerHTML = items.map(c => `
-    <div class="rcard">
-      <div class="rhead">
-        <span class="f">${c.flag}</span><span class="n">${c.name}</span><span class="p">${fmt(PRICE)}</span>
-        <button class="x" type="button" data-id="${c.id}" aria-label="Убрать ${c.name}">✕</button>
-      </div>
-      <ul>
-        <li>Список вузов страны</li>
-        <li>Документы для поступления в каждый вуз</li>
-        <li>Разбивка по направлениям подготовки</li>
-      </ul>
-    </div>`).join("");
-  $("reviewList").querySelectorAll(".x").forEach(b => b.onclick = () => {
-    toggle(b.dataset.id, false);
-    if (!cart.size) show("map"); else renderReview();
+  const p = pricing(), box = $("reviewList"); box.innerHTML = "";
+  selectedCountries().forEach(c => {
+    const data = G.countries[c.id];
+    const bonus = data ? `<div class="rbonus"><b>🎁 Бонус: ${data.universities.length} вузов страны</b>
+        <span>Подробный разбор бакалавриата и магистратуры, стоимость и стипендии. Уже включено в цену.</span>
+        <div class="unis">${data.universities.map(u => `<i>${u.name}</i>`).join("")}</div></div>` : "";
+    const card = document.createElement("div"); card.className = "rcard";
+    card.innerHTML = `
+      <div class="rhead"><span class="f">${c.flag}</span><span class="n">${c.name}</span><span class="p">${fmt(PRICE)}</span>
+        <button class="x" type="button" aria-label="Убрать ${c.name}">✕</button></div>
+      <p class="cap">Основной продукт: гайд (стратегия) поступления</p>
+      <ul class="inc">${includedOf(c.id).map(t => `<li>${t}</li>`).join("")}</ul>
+      ${bonus}`;
+    card.querySelector(".x").onclick = () => { toggle(c.id, false); cart.size || eu ? renderReview() : go("map"); };
+    box.appendChild(card);
   });
-  $("revCount").textContent = `${items.length} ${plural(items.length)}`;
-  $("revTotal").textContent = fmt(items.length * PRICE);
+  if (eu) {
+    const card = document.createElement("div"); card.className = "rcard";
+    card.innerHTML = `
+      <div class="rhead"><span class="f">🇪🇺</span><span class="n">Общий гайд по ЕС</span><span class="p">${fmt(EU_PRICE)}</span>
+        <button class="x" type="button" aria-label="Убрать общий гайд">✕</button></div>
+      <p class="cap">База для всех вузов</p>
+      <ul class="inc">${G.base.tabs.map(t => `<li>${t.label === "Резюме" ? "Резюме" : t.label === "Мотивационное" ? "Мотивационное письмо" : t.label === "Рекомендательное" ? "Рекомендательное письмо" : t.label}</li>`).join("")}</ul>`;
+    card.querySelector(".x").onclick = () => { toggleEu(); cart.size || eu ? renderReview() : go("map"); };
+    box.appendChild(card);
+  }
+  const rows = [];
+  if (p.n) rows.push(`<div><span>${p.n} ${plural(p.n)} × ${fmt(PRICE)}</span><span>${fmt(p.sub)}</span></div>`);
+  if (p.disc) rows.push(`<div class="disc"><span>Скидка ${Math.round(p.rate * 100)}%</span><span>−${fmt(p.disc)}</span></div>`);
+  if (eu) rows.push(`<div><span>Общий гайд по ЕС</span><span>${fmt(EU_PRICE)}</span></div>`);
+  rows.push(`<div class="total"><span>Итого</span><span>${fmt(p.total)}</span></div>`);
+  $("sum").innerHTML = rows.join("");
+  $("revCount").textContent = (p.n ? `${p.n} ${plural(p.n)}` : "") + (p.n && eu ? " + " : "") + (eu ? "гайд ЕС" : "");
+  $("revTotal").textContent = fmt(p.total);
 }
 
-/* ---------- оплата: пока без изменений, будет подключена позже ---------- */
+/* ---------- оплата ----------
+   Реальная оплата будет подключена позже. Пока в Telegram данные уходят боту как раньше,
+   а в браузере работает демо: «оплаченные» страны открываются без реального платежа. */
 $("pay").onclick = () => {
-  const ids = [...cart];
-  if (!ids.length) return;
+  const p = pricing(); if (!p.any) return;
   haptic("medium");
-  if (inTg) tg.sendData(JSON.stringify({ ids }));
-  else toast("Демо-версия: оплата будет подключена позже");
+  if (inTg) { tg.sendData(JSON.stringify({ ids: [...cart], eu })); return; }
+  applyPaid([...cart], eu);
+  toast("Демо-оплата: страны добавлены в «Оплаченные страны»");
+  renderPaid(); go("paid");
 };
+/* Когда появится бэкенд, он должен вызывать applyPaid(ids, eu) с реально оплаченными странами. */
+function applyPaid(ids, withEu) {
+  ids.forEach(id => { paid.add(id); cart.delete(id); });
+  if (withEu) { paidEu = true; eu = false; }
+  renderList(); paintSelection(); renderBar();
+}
 
+/* ---------- оплаченные страны ---------- */
+function renderPaid() {
+  const box = $("paidList"); box.innerHTML = "";
+  const items = [];
+  if (paidEu) items.push({ key: "eu", flag: "🇪🇺", name: "Общий гайд по ЕС", sub: "База для всех вузов: резюме и письма" });
+  COUNTRIES.filter(c => paid.has(c.id)).forEach(c =>
+    items.push({ key: c.id, flag: c.flag, name: c.name, sub: hasGuide(c.id) ? `Гайд (стратегия) + ${G.countries[c.id].universities.length} вузов в подарок` : "Гайд (стратегия) поступления" }));
+  if (!items.length) {
+    box.innerHTML = `<div class="empty">Здесь появятся страны после оплаты.<br>Выберите страны на карте.</div>`;
+    return;
+  }
+  items.forEach(it => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "pcard";
+    b.innerHTML = `<span class="f">${it.flag}</span><span class="tx"><span class="n">${it.name}</span><span class="s">${it.sub}</span></span><span class="go">›</span>`;
+    b.onclick = () => openGuide(it.key); box.appendChild(b);
+  });
+}
+
+/* ---------- просмотр гайда ---------- */
+let gs = null;   // состояние просмотра: { key, data, meta, tab, uni, sub }
+function wrapTables(el) {
+  el.querySelectorAll("table").forEach(t => {
+    if (t.parentElement.classList.contains("tw")) return;
+    const w = document.createElement("div"); w.className = "tw"; t.replaceWith(w); w.appendChild(t);
+  });
+}
+function openGuide(key) {
+  const isEu = key === "eu";
+  const data = isEu ? G.base : G.countries[key];
+  const meta = isEu ? { flag: "🇪🇺", name: "Общий гайд по ЕС" } : byId[key];
+  $("gTitle").textContent = `${meta.flag} ${meta.name}`;
+  if (!data) {   // для этой страны материалов в базе ещё нет
+    gs = null;
+    $("gTabs").innerHTML = "";
+    $("gBody").innerHTML = `<div class="card muted">Материалы по стране «${meta.name}» ещё не добавлены в базу guides.js.</div>`;
+    go("guide"); $("gScroll").scrollTop = 0; return;
+  }
+  gs = { key, data, meta, tab: data.tabs[0].key, uni: null, sub: null };
+  renderGuideTabs(); renderGuideBody(); go("guide");
+  $("gScroll").scrollTop = 0;
+}
+function renderGuideTabs() {
+  const box = $("gTabs"); box.innerHTML = "";
+  gs.data.tabs.forEach(t => {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = t.label;
+    b.className = t.key === gs.tab ? "active" : "";
+    b.onclick = () => { gs.tab = t.key; renderGuideTabs(); renderGuideBody(); $("gScroll").scrollTop = 0; };
+    box.appendChild(b);
+  });
+}
+function renderGuideBody() {
+  const body = $("gBody");
+  if (gs.tab === "uni") return renderUni(body);
+  const html = gs.data.sections[gs.tab];
+  body.innerHTML = html; wrapTables(body);
+}
+function renderUni(body) {
+  const unis = gs.data.universities;
+  const u = unis.find(x => x.id === gs.uni) || unis[0];
+  if (gs.uni !== u.id) { gs.uni = u.id; gs.sub = null; }
+  const sub = u.tabs.find(t => t.key === gs.sub) || u.tabs[0]; gs.sub = sub.key;
+
+  body.innerHTML = "";
+  const head = document.createElement("div");
+  head.innerHTML = `<span class="tag">${gs.meta.name} · Вузы</span><h2>Выберите университет</h2>
+    <div class="bonus-note"><b>🎁 Бонус:</b> эти ${unis.length} вузов уже включены в стоимость страны. Для каждого подробно разобраны бакалавриат и магистратура.</div>`;
+  body.appendChild(head);
+
+  const pills = document.createElement("div"); pills.className = "pills";
+  unis.forEach(x => {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = x.name;
+    b.className = x.id === u.id ? "active" : "";
+    b.onclick = () => { gs.uni = x.id; gs.sub = null; renderUni(body); };
+    pills.appendChild(b);
+  });
+  body.appendChild(pills);
+
+  const intro = document.createElement("div"); intro.innerHTML = u.intro; body.appendChild(intro);
+  const stabs = document.createElement("div"); stabs.className = "stabs";
+  u.tabs.forEach(t => {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = t.label;
+    b.className = t.key === sub.key ? "active" : "";
+    b.onclick = () => { gs.sub = t.key; renderUni(body); };
+    stabs.appendChild(b);
+  });
+  body.appendChild(stabs);
+  const content = document.createElement("div"); content.innerHTML = sub.html; body.appendChild(content);
+  wrapTables(body);
+}
+
+/* ---------- запуск ---------- */
+renderSplash();
 renderList();
 renderBar();
 initMap();
-let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { drawMap(); renderBar(); }, 200); });
+let rt;
+addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { drawMap(); setBarHeight(); }, 200); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(setBarHeight);
 </script>
 </body>
 </html>
